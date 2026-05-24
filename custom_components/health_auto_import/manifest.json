@@ -1,7 +1,7 @@
 {
   "domain": "health_auto_import",
   "name": "Health Auto Import",
-  "version": "0.0.1-beta.1",
+  "version": "0.0.2-beta.1",
   "documentation": "https://github.com/leithma/health-auto-import",
   "issue_tracker": "https://github.com/leithma/health-auto-import/issues",
   "codeowners": ["@leithma"],
