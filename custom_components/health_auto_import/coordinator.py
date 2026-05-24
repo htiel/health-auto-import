@@ -417,7 +417,14 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 window_start = self.wm.oldest_metric_watermark() - self._overlap()
         elif self.wm.watermark is not None:
-            window_start = self.wm.watermark - self._overlap()
+            if not self.latest_records:
+                # First poll after restart: re-fetch a wider window so
+                # sensors can display the most recent record (e.g. the
+                # last workout whose start time predates the narrow
+                # watermark − overlap window).
+                window_start = self.wm.watermark - timedelta(days=SEED_WINDOW_DAYS)
+            else:
+                window_start = self.wm.watermark - self._overlap()
         elif self.tool_name in SPARSE_TOOLS:
             # Sparse tool with no watermark yet — seed with 30 days.
             window_start = now - timedelta(days=SEED_WINDOW_DAYS * 4)
