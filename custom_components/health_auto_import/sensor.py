@@ -130,7 +130,7 @@ class LastProbeSensor(HaeEntity, SensorEntity):
 
     @property
     def native_value(self) -> dt.datetime | None:
-        return self.coordinator.last_update_success_time
+        return self.coordinator.last_probe_time
 
 
 class ServerStatusSensor(HaeEntity, SensorEntity):

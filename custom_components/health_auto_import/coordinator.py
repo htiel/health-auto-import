@@ -173,10 +173,14 @@ class ReachabilityCoordinator(DataUpdateCoordinator[bool]):
             update_interval=timedelta(seconds=INTERVAL_REACHABILITY_S),
         )
         self.client = client
+        self.last_probe_time: dt.datetime | None = None
 
     async def _async_update_data(self) -> bool:
         try:
-            return await self.client.probe()
+            result = await self.client.probe()
+            if result:
+                self.last_probe_time = dt_util.utcnow()
+            return result
         except HaeTransportError as err:
             raise UpdateFailed(str(err)) from err
         except HaeError as err:
