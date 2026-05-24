@@ -29,9 +29,11 @@ from .const import (
     MAX_RESPONSE_BYTES,
     READ_CHUNK_BYTES,
     READ_TIMEOUT_S,
+    READ_TIMEOUT_HEAVY_S,
     RPC_METHOD_CALL_TOOL,
     RPC_METHOD_LIST_TOOLS,
     RPC_METHOD_LIST_TOOLS_LEGACY,
+    TOOL_HEALTH_METRICS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -173,11 +175,13 @@ class HaeClient:
         Raises ``HaeProtocolError`` on JSON-RPC errors (including unknown tool
         signalled as ``-32602``).
         """
+        timeout = READ_TIMEOUT_HEAVY_S if name == TOOL_HEALTH_METRICS else None
         resp = await self._send(
             {
                 "method": RPC_METHOD_CALL_TOOL,
                 "params": {"name": name, "arguments": arguments},
-            }
+            },
+            timeout=timeout,
         )
         err = resp.get("error")
         if isinstance(err, dict):
@@ -190,7 +194,9 @@ class HaeClient:
 
     # ---- private --------------------------------------------------------------
 
-    async def _send(self, envelope: dict[str, Any]) -> dict[str, Any]:
+    async def _send(
+        self, envelope: dict[str, Any], *, timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Open a TCP connection, send one JSON-RPC request, read one response.
 
         Security:
@@ -199,6 +205,7 @@ class HaeClient:
          - Connection is always closed in the ``finally`` block.
          - Connection lock prevents concurrent requests that freeze HAE.
         """
+        read_timeout = timeout if timeout is not None else READ_TIMEOUT_S
         body: dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": _rpc_id(),
@@ -227,7 +234,7 @@ class HaeClient:
                     ) from err
 
                 buf = bytearray()
-                deadline = asyncio.get_running_loop().time() + READ_TIMEOUT_S
+                deadline = asyncio.get_running_loop().time() + read_timeout
                 while True:
                     remaining = deadline - asyncio.get_running_loop().time()
                     if remaining <= 0:

@@ -12,7 +12,8 @@ DEFAULT_PORT: Final = 9000
 MIN_PORT: Final = 1
 MAX_PORT: Final = 65535
 CONNECT_TIMEOUT_S: Final = 10.0
-READ_TIMEOUT_S: Final = 30.0
+READ_TIMEOUT_S: Final = 15.0
+READ_TIMEOUT_HEAVY_S: Final = 30.0  # health_metrics can take 7-16s
 READ_CHUNK_BYTES: Final = 65536
 # Delay after each TCP request (inside lock) to let the iOS app recover.
 INTER_REQUEST_DELAY_S: Final = 0.5
