@@ -211,7 +211,12 @@ class HaeClient:
 
             try:
                 writer.write(payload)
-                await writer.drain()
+                try:
+                    await writer.drain()
+                except OSError as err:
+                    raise HaeTransportError(
+                        f"write error: {err}"
+                    ) from err
 
                 buf = bytearray()
                 deadline = asyncio.get_running_loop().time() + READ_TIMEOUT_S
@@ -225,6 +230,10 @@ class HaeClient:
                         )
                     except asyncio.TimeoutError as err:
                         raise HaeTransportError("read timeout") from err
+                    except OSError as err:
+                        raise HaeTransportError(
+                            f"read error: {err}"
+                        ) from err
                     if not chunk:
                         break
                     buf.extend(chunk)

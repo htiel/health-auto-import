@@ -99,18 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
-    # Persist watermarks on HA stop.
-    async def _save_watermarks(_event: object) -> None:
-        wm_data = {
-            name: coord.wm.to_dict() for name, coord in coordinators.items()
-        }
-        new_options = {**entry.options, "watermarks": wm_data}
-        hass.config_entries.async_update_entry(entry, options=new_options)
-
-    entry.async_on_unload(
-        hass.bus.async_listen_once("homeassistant_stop", _save_watermarks)
-    )
-
     return True
 
 
