@@ -42,7 +42,14 @@ from .coordinator import (
     parse_hae_ts,
     safe_slug,
 )
-from .entity import HaeEntity
+from .entity import (
+    DEVICE_HEALTH_METRICS,
+    DEVICE_HEART,
+    DEVICE_MEDICATIONS,
+    DEVICE_SERVER,
+    DEVICE_WORKOUTS,
+    HaeEntity,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,7 +125,8 @@ class LastProbeSensor(HaeEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: ReachabilityCoordinator, *, entry_id: str, host: str) -> None:
-        super().__init__(coordinator, entry_id=entry_id, host=host, unique_suffix="last_probe")
+        super().__init__(coordinator, entry_id=entry_id, host=host, unique_suffix="last_probe",
+                         device_group=DEVICE_SERVER)
 
     @property
     def native_value(self) -> dt.datetime | None:
@@ -138,7 +146,8 @@ class ServerStatusSensor(HaeEntity, SensorEntity):
         entry_id: str,
         host: str,
     ) -> None:
-        super().__init__(reachability, entry_id=entry_id, host=host, unique_suffix="status")
+        super().__init__(reachability, entry_id=entry_id, host=host, unique_suffix="status",
+                         device_group=DEVICE_SERVER)
         self._tool_coordinators = tool_coordinators
 
     @property
@@ -167,7 +176,8 @@ class ConsecutiveFailuresSensor(HaeEntity, SensorEntity):
         host: str,
     ) -> None:
         super().__init__(reachability, entry_id=entry_id, host=host,
-                         unique_suffix="consecutive_failures")
+                         unique_suffix="consecutive_failures",
+                         device_group=DEVICE_SERVER)
         self._tool_coordinators = tool_coordinators
 
     @property
@@ -204,7 +214,8 @@ class _EcgClassificationSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_classification")
+                         unique_suffix="ecg_last_classification",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> str | None:
@@ -219,7 +230,8 @@ class _EcgAvgBpmSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_average_bpm")
+                         unique_suffix="ecg_last_average_bpm",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> int | None:
@@ -234,7 +246,8 @@ class _EcgTakenAtSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_taken_at")
+                         unique_suffix="ecg_last_taken_at",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> dt.datetime | None:
@@ -250,7 +263,8 @@ class _EcgDurationSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_duration_s")
+                         unique_suffix="ecg_last_duration_s",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> float | None:
@@ -272,7 +286,8 @@ class _EcgSamplingHzSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_sampling_frequency_hz")
+                         unique_suffix="ecg_last_sampling_frequency_hz",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> int | None:
@@ -287,7 +302,8 @@ class _EcgVoltageCountSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="ecg_last_voltage_count")
+                         unique_suffix="ecg_last_voltage_count",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> int | None:
@@ -318,7 +334,8 @@ class _HrnLastKindSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="hrn_last_kind")
+                         unique_suffix="hrn_last_kind",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> str | None:
@@ -334,7 +351,8 @@ class _HrnLastAtSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="hrn_last_at")
+                         unique_suffix="hrn_last_at",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> dt.datetime | None:
@@ -348,7 +366,8 @@ class _HrnCount7dSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="hrn_count_7d")
+                         unique_suffix="hrn_count_7d",
+                         device_group=DEVICE_HEART)
 
     @property
     def native_value(self) -> int:
@@ -382,7 +401,8 @@ class _WorkoutTypeSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_type")
+                         unique_suffix="workout_last_type",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> str | None:
@@ -396,7 +416,8 @@ class _WorkoutStartedAtSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_started_at")
+                         unique_suffix="workout_last_started_at",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> dt.datetime | None:
@@ -412,7 +433,8 @@ class _WorkoutDurationSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_duration_min")
+                         unique_suffix="workout_last_duration_min",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> float | None:
@@ -428,7 +450,8 @@ class _WorkoutEnergySensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_active_energy_kcal")
+                         unique_suffix="workout_last_active_energy_kcal",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> float | None:
@@ -448,7 +471,8 @@ class _WorkoutAvgHrSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_avg_hr_bpm")
+                         unique_suffix="workout_last_avg_hr_bpm",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> int | None:
@@ -471,7 +495,8 @@ class _WorkoutMaxHrSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_last_max_hr_bpm")
+                         unique_suffix="workout_last_max_hr_bpm",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> int | None:
@@ -493,7 +518,8 @@ class _WorkoutCount7dSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="workout_count_7d")
+                         unique_suffix="workout_count_7d",
+                         device_group=DEVICE_WORKOUTS)
 
     @property
     def native_value(self) -> int:
@@ -531,7 +557,8 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
         slug: str,
     ) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix=f"metric_{slug}_latest")
+                         unique_suffix=f"metric_{slug}_latest",
+                         device_group=DEVICE_HEALTH_METRICS)
         self._metric_name = metric_name
         self._attr_name = f"{metric_name.replace('_', ' ').title()} (latest)"
 
@@ -613,7 +640,8 @@ class _MedicationLastStatusSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="med_last_status")
+                         unique_suffix="med_last_status",
+                         device_group=DEVICE_MEDICATIONS)
 
     @property
     def native_value(self) -> str | None:
@@ -639,7 +667,8 @@ class _MedicationLastScheduledAtSensor(HaeEntity, SensorEntity):
 
     def __init__(self, coord: ToolCoordinator, *, entry_id: str, host: str) -> None:
         super().__init__(coord, entry_id=entry_id, host=host,
-                         unique_suffix="med_last_scheduled_at")
+                         unique_suffix="med_last_scheduled_at",
+                         device_group=DEVICE_MEDICATIONS)
 
     @property
     def native_value(self) -> dt.datetime | None:

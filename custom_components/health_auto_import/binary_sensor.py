@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import ReachabilityCoordinator
-from .entity import HaeEntity
+from .entity import DEVICE_SERVER, HaeEntity
 
 
 async def async_setup_entry(
@@ -47,7 +47,8 @@ class ReachabilityBinarySensor(HaeEntity, BinarySensorEntity):
         host: str,
     ) -> None:
         super().__init__(
-            coordinator, entry_id=entry_id, host=host, unique_suffix="reachable"
+            coordinator, entry_id=entry_id, host=host, unique_suffix="reachable",
+            device_group=DEVICE_SERVER,
         )
 
     @property
