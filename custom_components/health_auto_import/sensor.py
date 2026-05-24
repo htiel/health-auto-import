@@ -582,11 +582,9 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
 
     # Unit cleanup: server unit → display unit.
     _UNIT_MAP: dict[str, str] = {
-        "count": "",
         "count/min": "bpm",
         "degF": "°F",
         "degC": "°C",
-        "dBASPL": "dBA",
         "kcal/hr·kg": "kcal/hr·kg",
         "ml/(kg·min)": "mL/kg/min",
     }
