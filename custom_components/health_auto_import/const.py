@@ -76,13 +76,20 @@ OPT_IN_TOOLS: Final = frozenset({
     TOOL_CYCLE_TRACKING,
 })
 
-# --- Polling intervals (seconds, defaults — overridden by adaptive scheduler) -
-INTERVAL_REACHABILITY_S: Final = 60
-INTERVAL_HEALTH_METRICS_S: Final = 600       # 10 min
-INTERVAL_ECG_S: Final = 300                  # 5 min
-INTERVAL_WORKOUTS_S: Final = 60              # 1 min
-INTERVAL_HRN_S: Final = 60                   # 1 min
-INTERVAL_MEDICATIONS_S: Final = 900          # 15 min
+# --- Polling intervals (seconds) -----------------------------------------------
+# Tuned from 128 days of actual data (2026-01-16 to 2026-05-23):
+#   health_metrics: daily rollups, some intraday → 30 min
+#   workouts:       0.2/day (~weekly) → 10 min
+#   ecg:            0.27/day (~weekly) → 30 min
+#   heart_notif:    ~0/month → 1 hour
+#   medications:    1.1/day (daily) → 30 min
+# Total: ~300 TCP calls/day (was ~3,400 at old intervals).
+INTERVAL_REACHABILITY_S: Final = 120
+INTERVAL_HEALTH_METRICS_S: Final = 1800      # 30 min (was 10 min)
+INTERVAL_ECG_S: Final = 1800                 # 30 min (was 5 min)
+INTERVAL_WORKOUTS_S: Final = 600             # 10 min (was 1 min)
+INTERVAL_HRN_S: Final = 3600                 # 1 hour (was 1 min)
+INTERVAL_MEDICATIONS_S: Final = 1800         # 30 min (was 15 min)
 
 TOOL_INTERVALS: Final[dict[str, int]] = {
     TOOL_ECG: INTERVAL_ECG_S,
