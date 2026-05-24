@@ -40,7 +40,6 @@ from .const import (
     MAX_TOOLS,
     OVERLAP_DENSE_S,
     OVERLAP_SPARSE_S,
-    RPC_ERR_INVALID_PARAMS,
     SEED_WINDOW_DAYS,
     SPARSE_TOOLS,
     TOOL_HEALTH_METRICS,
@@ -237,40 +236,11 @@ async def run_discovery(client: HaeClient) -> DiscoveryResult:
         if name and name != "listtools" and name != "unknown":
             tool_names.append(name)
 
-    # 2. Probe each tool to confirm reachable.
-    confirmed: list[str] = []
+    # 2. Metric discovery (trust listTools — coordinator first_refresh
+    #    will catch any tool that doesn't actually work).
+    confirmed = tool_names
     now = dt_util.utcnow()
     probe_end = hae_ts(now)
-    probe_start = hae_ts(now - timedelta(hours=1))
-    for name in tool_names:
-        try:
-            if name == TOOL_HEALTH_METRICS:
-                args: dict[str, Any] = {
-                    "metrics": "heart_rate",
-                    "start": probe_start,
-                    "end": probe_end,
-                }
-            elif name == TOOL_WORKOUTS:
-                args = {
-                    "start": probe_start,
-                    "end": probe_end,
-                    "includeMetadata": False,
-                    "includeRoutes": False,
-                }
-            else:
-                args = {"start": probe_start, "end": probe_end}
-            await client.call_tool(name, args)
-            confirmed.append(name)
-        except HaeProtocolError as exc:
-            if exc.code in (RPC_ERR_INVALID_PARAMS, -32601):
-                _LOGGER.debug("Tool %s not available: %s", name, exc)
-            else:
-                _LOGGER.warning("Unexpected error probing tool %s: %s", name, exc)
-        except HaeTransportError as exc:
-            _LOGGER.warning("Transport error probing tool %s: %s", name, exc)
-            break  # Server probably went down — stop probing.
-
-    # 3. Metric discovery.
     metrics: list[str] = []
     if TOOL_HEALTH_METRICS in confirmed:
         try:

@@ -581,12 +581,10 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
     }
 
     # Unit cleanup: server unit → display unit.
+    # Only cosmetic normalisations that don't break recorder statistics.
     _UNIT_MAP: dict[str, str] = {
-        "count/min": "bpm",
         "degF": "°F",
         "degC": "°C",
-        "kcal/hr·kg": "kcal/hr·kg",
-        "ml/(kg·min)": "mL/kg/min",
     }
 
     def __init__(

@@ -34,60 +34,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     client = HaeClient(host, port)
 
-    # 1. Reachability coordinator (always present).
+    # 1. Reachability coordinator (always present — but skip first_refresh;
+    #    discovery below will prove reachability and populate last_success).
     reachability = ReachabilityCoordinator(hass, client)
-    await reachability.async_config_entry_first_refresh()
 
-    # 2. Discovery — probe tools + metric inventory.
+    # 2. Discovery — list tools + metric inventory.
     coordinators: dict[str, ToolCoordinator] = {}
     discovered_metrics: list[str] = []
+    reachable = False
 
-    if reachability.data:  # Server is reachable on first load.
-        try:
-            discovery = await run_discovery(client)
-            _LOGGER.info(
-                "Discovered %d tools and %d metrics on %s:%d",
-                len(discovery.tools),
-                len(discovery.metrics),
-                host,
-                port,
+    try:
+        discovery = await run_discovery(client)
+        reachable = True
+        _LOGGER.info(
+            "Discovered %d tools and %d metrics on %s:%d",
+            len(discovery.tools),
+            len(discovery.metrics),
+            host,
+            port,
+        )
+        discovered_metrics = discovery.metrics
+
+        # Load persisted watermarks (if any) from config entry options.
+        saved_wm: dict[str, dict] = entry.options.get("watermarks", {})
+
+        # 3. Create one coordinator per discovered tool.
+        for tool_name in discovery.tools:
+            if tool_name in OPT_IN_TOOLS:
+                # Skip opt-in tools unless enabled by user.
+                if not entry.options.get(f"enable_{tool_name}", False):
+                    continue
+            wm = WatermarkState.from_dict(saved_wm.get(tool_name, {}))
+            coord = ToolCoordinator(
+                hass,
+                client,
+                tool_name=tool_name,
+                watermark_state=wm,
             )
-            discovered_metrics = discovery.metrics
+            coordinators[tool_name] = coord
 
-            # Load persisted watermarks (if any) from config entry options.
-            saved_wm: dict[str, dict] = entry.options.get("watermarks", {})
-
-            # 3. Create one coordinator per discovered tool.
-            for tool_name in discovery.tools:
-                if tool_name in OPT_IN_TOOLS:
-                    # Skip opt-in tools unless enabled by user.
-                    if not entry.options.get(f"enable_{tool_name}", False):
-                        continue
-                wm = WatermarkState.from_dict(saved_wm.get(tool_name, {}))
-                coord = ToolCoordinator(
-                    hass,
-                    client,
-                    tool_name=tool_name,
-                    watermark_state=wm,
+        # First refresh for all coordinators.
+        for coord in coordinators.values():
+            try:
+                await coord.async_config_entry_first_refresh()
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Initial refresh failed for %s — will retry on next poll",
+                    coord.tool_name,
                 )
-                coordinators[tool_name] = coord
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "Discovery failed for %s:%d — integration will operate in "
+            "reachability-only mode until next reload",
+            host,
+            port,
+        )
 
-            # First refresh for all coordinators.
-            for coord in coordinators.values():
-                try:
-                    await coord.async_config_entry_first_refresh()
-                except Exception:  # noqa: BLE001
-                    _LOGGER.warning(
-                        "Initial refresh failed for %s — will retry on next poll",
-                        coord.tool_name,
-                    )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "Discovery failed for %s:%d — integration will operate in "
-                "reachability-only mode until next reload",
-                host,
-                port,
-            )
+    # Seed reachability from discovery result to avoid an extra probe.
+    reachability.data = reachable
+    await reachability.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "client": client,
