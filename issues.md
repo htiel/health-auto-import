@@ -1,10 +1,10 @@
 # Known Issues
 
-## #1 — HAE TCP server freezes when iOS app is backgrounded
+## #1 — HAE TCP server and UI freeze after ~2–3 minutes of polling
 
-**Status:** Open — upstream iOS limitation, not fixable from the integration side  
+**Status:** Open — upstream HAE app bug  
 **Severity:** Critical — makes the integration unreliable without manual intervention  
-**Root cause:** iOS suspends the Health Auto Export app process after ~2–3 minutes in the background. The TCP server becomes unresponsive mid-request. This is standard iOS behavior for apps that have not requested background execution entitlements.
+**Root cause:** The HAE TCP/MCP server becomes unresponsive after ~2–3 minutes of sustained polling. The app is in the **foreground** the entire time. After the freeze, the HAE UI itself locks up — the user can navigate to another page within HAE but then the entire UI becomes unresponsive. This suggests the TCP server or a HealthKit callback is blocking the main thread.
 
 ### Evidence
 
@@ -30,19 +30,16 @@ Key finding: the freeze happens on **light calls** (workouts, heart_notification
 | v0.0.12 | Reduced discovery from 10 probe calls to 1 `listTools` + 1 `health_metrics`. Skip standalone probe at startup. Cooldown reduced to 0.5s. | Setup time dropped from ~30s to ~8s. Did not prevent freeze. |
 | v0.0.13 | Per-tool read timeouts: 15s default, 30s for `health_metrics` | Faster recovery (lock held 15s instead of 30s during freeze). Did not prevent freeze. |
 
-### What would fix it
+### Possible causes
 
-The HAE iOS app developer would need to implement one of:
-- `BGProcessingTaskRequest` for periodic background execution
-- A Network Extension entitlement to keep the TCP server alive
-- `beginBackgroundTask(withName:)` for short-lived keep-alive pings
+- TCP server dispatching HealthKit queries on the main thread
+- NWConnection resources not being released after each client disconnect (server logs NWError 89 after every close)
+- GCD/actor queue saturation from accumulated connection handling
+- HealthKit callback deadlocking the main thread after sustained queries
 
 ### Workaround
 
-Keep the HAE app in the **foreground** on the iOS device:
-- Use **Guided Access** or **Single App Mode**
-- Set **Auto-Lock = Never**
-- Keep the device on a charger
+Force-close and reopen the HAE app when sensors go unavailable. Not sustainable.
 
 ---
 

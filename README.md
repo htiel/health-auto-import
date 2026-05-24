@@ -83,13 +83,13 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 
 | # | Issue | Status | Severity |
 |---|-------|--------|----------|
-| 1 | HAE TCP server freezes when iOS app is backgrounded (~2–3 min) | Open — upstream iOS limitation | Critical |
+| 1 | HAE TCP server and UI freeze after ~2–3 min of polling | Open — upstream HAE app bug | Critical |
 | 2 | Sensors show "Unavailable" during freeze | Open — expected behavior | Medium |
 | 3 | "receive failed" NWError 89 in HAE logs | Closed — benign log noise | Low |
 | 4 | Unit mapping mismatches causing recorder warnings | Fixed in v0.0.12 | Medium |
 | 5 | Slow initial setup (~30s) | Fixed in v0.0.12 | Medium |
 
-**The #1 blocker is iOS suspending the HAE app in background.** The integration is as resilient as possible — sensors go Unavailable during a freeze and recover automatically when the app is reopened. A real fix requires the HAE developer to implement iOS background execution APIs.
+**The #1 blocker is the HAE app freezing after ~2–3 minutes of polling.** The app freezes even in the foreground — the UI locks up and the TCP server stops responding. The integration is as resilient as possible — sensors go Unavailable during a freeze and recover when the app is force-closed and reopened.
 
 ## Spec & design
 
