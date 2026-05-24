@@ -547,6 +547,50 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
 
+    # Metrics that should be displayed as integers.
+    _INTEGER_METRICS = frozenset({
+        "apple_stand_hour", "flights_climbed", "step_count",
+        "resting_heart_rate", "walking_heart_rate_average",
+        "six_minute_walking_test_distance",
+    })
+
+    # Metrics that return composite/string values (no state_class).
+    _COMPOSITE_METRICS = frozenset({"blood_pressure", "sleep_analysis"})
+
+    # Rounding precision per metric (default is 1 decimal).
+    _PRECISION: dict[str, int] = {
+        "blood_oxygen_saturation": 0,
+        "walking_asymmetry_percentage": 0,
+        "walking_double_support_percentage": 1,
+        "heart_rate_variability": 1,
+        "respiratory_rate": 1,
+        "vo2_max": 1,
+        "apple_sleeping_wrist_temperature": 1,
+        "active_energy": 1,
+        "basal_energy_burned": 1,
+        "physical_effort": 1,
+        "walking_speed": 1,
+        "walking_step_length": 1,
+        "stair_speed_down": 2,
+        "stair_speed_up": 2,
+        "walking_running_distance": 2,
+        "environmental_audio_exposure": 1,
+        "headphone_audio_exposure": 1,
+        "cardio_recovery": 1,
+        "breathing_disturbances": 1,
+    }
+
+    # Unit cleanup: server unit → display unit.
+    _UNIT_MAP: dict[str, str] = {
+        "count": "",
+        "count/min": "bpm",
+        "degF": "°F",
+        "degC": "°C",
+        "dBASPL": "dBA",
+        "kcal/hr·kg": "kcal/hr·kg",
+        "ml/(kg·min)": "mL/kg/min",
+    }
+
     def __init__(
         self,
         coord: ToolCoordinator,
@@ -560,10 +604,20 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                          unique_suffix=f"metric_{slug}_latest",
                          device_group=DEVICE_HEALTH_METRICS)
         self._metric_name = metric_name
+        self._slug = slug
         self._attr_name = f"{metric_name.replace('_', ' ').title()} (latest)"
+        if slug in self._COMPOSITE_METRICS:
+            self._attr_state_class = None
+
+    def _round(self, value: float) -> float | int:
+        """Round a numeric value based on metric type."""
+        if self._slug in self._INTEGER_METRICS:
+            return int(round(value))
+        precision = self._PRECISION.get(self._slug, 1)
+        return round(value, precision)
 
     @property
-    def native_value(self) -> float | str | None:
+    def native_value(self) -> float | int | str | None:
         records = self.coordinator.latest_records  # type: ignore[union-attr]
         if not records:
             return None
@@ -572,24 +626,39 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                 points = bucket.get("data")
                 if isinstance(points, list) and points:
                     latest = max(points, key=lambda p: p.get("date", ""))
-                    # Composite metrics (blood_pressure, sleep_analysis) have nested shape.
-                    if "qty" in latest:
-                        return latest["qty"]
+                    # Composite: blood_pressure
                     if "systolic" in latest and "diastolic" in latest:
-                        return f"{latest['systolic']}/{latest['diastolic']}"
+                        sys_v = round(latest["systolic"])
+                        dia_v = round(latest["diastolic"])
+                        return f"{sys_v}/{dia_v}"
+                    # Composite: sleep_analysis (totalSleep is in hours)
                     if "totalSleep" in latest:
-                        return round(latest["totalSleep"] * 60, 1)
+                        hours = latest["totalSleep"]
+                        h = int(hours)
+                        m = int(round((hours - h) * 60))
+                        return f"{h}h {m}m"
+                    if "qty" in latest:
+                        val = latest["qty"]
+                        if isinstance(val, (int, float)):
+                            return self._round(val)
+                        return val
         return None
 
     @property
     def native_unit_of_measurement(self) -> str | None:
+        # Composite metrics that return strings don't have a single unit.
+        if self._slug in ("blood_pressure", "sleep_analysis"):
+            return None
         records = self.coordinator.latest_records  # type: ignore[union-attr]
         if not records:
             return None
         for bucket in records:
             if bucket.get("name") == self._metric_name:
                 units = bucket.get("units", "")
-                return units if units else None
+                if not units:
+                    return None
+                # Clean up server unit names.
+                return self._UNIT_MAP.get(units, units)
         return None
 
     @property
