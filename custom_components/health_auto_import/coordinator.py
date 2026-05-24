@@ -124,9 +124,17 @@ class WatermarkState:
         self.watermark: dt.datetime | None = None
         self.last_success_at: dt.datetime | None = None
         self.dedup = _DedupLRU()
+        # Per-metric watermarks (health_metrics only).
+        self.metric_watermarks: dict[str, dt.datetime] = {}
+
+    def oldest_metric_watermark(self) -> dt.datetime | None:
+        """Return the oldest per-metric watermark, or None if empty."""
+        if not self.metric_watermarks:
+            return None
+        return min(self.metric_watermarks.values())
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "initial_crawl_done": self.initial_crawl_done,
             "watermark": self.watermark.isoformat() if self.watermark else None,
             "last_success_at": (
@@ -134,6 +142,11 @@ class WatermarkState:
             ),
             "seen_keys": self.dedup.export(),
         }
+        if self.metric_watermarks:
+            d["metric_watermarks"] = {
+                k: v.isoformat() for k, v in self.metric_watermarks.items()
+            }
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WatermarkState:
@@ -154,6 +167,14 @@ class WatermarkState:
         keys = data.get("seen_keys")
         if isinstance(keys, list):
             ws.dedup.load([k for k in keys if isinstance(k, str)])
+        mw_raw = data.get("metric_watermarks")
+        if isinstance(mw_raw, dict):
+            for mk, mv in mw_raw.items():
+                if isinstance(mk, str) and isinstance(mv, str):
+                    try:
+                        ws.metric_watermarks[mk] = dt.datetime.fromisoformat(mv)
+                    except ValueError:
+                        pass
         return ws
 
 
@@ -380,7 +401,12 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now = dt_util.utcnow()
 
         # Compute query window.
-        if self.wm.watermark is not None:
+        if self.tool_name == TOOL_HEALTH_METRICS and self.wm.metric_watermarks:
+            # Use the OLDEST per-metric watermark so infrequent metrics
+            # (e.g. blood_pressure) aren't left behind when frequent metrics
+            # (e.g. step_count) advance the global watermark.
+            window_start = self.wm.oldest_metric_watermark() - self._overlap()
+        elif self.wm.watermark is not None:
             window_start = self.wm.watermark - self._overlap()
         elif self.tool_name in SPARSE_TOOLS:
             # Sparse tool with no watermark yet — seed with 30 days.
@@ -431,12 +457,18 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if key not in self.wm.dedup:
                         self.wm.dedup.add(key)
                         new_points.append(pt)
-                        # Advance watermark from point's date.
+                        # Advance per-metric watermark.
                         pt_ts = _clamp_ts(parse_hae_ts(pt.get("date", "")))
-                        if pt_ts and (
-                            self.wm.watermark is None or pt_ts > self.wm.watermark
-                        ):
-                            self.wm.watermark = pt_ts
+                        if pt_ts:
+                            prev = self.wm.metric_watermarks.get(metric_name)
+                            if prev is None or pt_ts > prev:
+                                self.wm.metric_watermarks[metric_name] = pt_ts
+                            # Also advance global watermark.
+                            if (
+                                self.wm.watermark is None
+                                or pt_ts > self.wm.watermark
+                            ):
+                                self.wm.watermark = pt_ts
                 if new_points:
                     new_records.append({
                         "name": metric_name,
