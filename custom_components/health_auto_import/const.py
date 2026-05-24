@@ -14,6 +14,8 @@ MAX_PORT: Final = 65535
 CONNECT_TIMEOUT_S: Final = 10.0
 READ_TIMEOUT_S: Final = 30.0
 READ_CHUNK_BYTES: Final = 65536
+# Delay after each TCP request (inside lock) to let the iOS app recover.
+INTER_REQUEST_DELAY_S: Final = 1.0
 # Hard ceiling on a single JSON-RPC response to prevent OOM from a
 # rogue/compromised server. 4 MiB accommodates a 30 s ECG with full voltage
 # (15 360 floats ≈ 140 KiB JSON) plus workouts with metadata.
@@ -75,7 +77,7 @@ OPT_IN_TOOLS: Final = frozenset({
 
 # --- Polling intervals (seconds, defaults — overridden by adaptive scheduler) -
 INTERVAL_REACHABILITY_S: Final = 60
-INTERVAL_HEALTH_METRICS_S: Final = 300       # 5 min
+INTERVAL_HEALTH_METRICS_S: Final = 600       # 10 min
 INTERVAL_ECG_S: Final = 300                  # 5 min
 INTERVAL_WORKOUTS_S: Final = 60              # 1 min
 INTERVAL_HRN_S: Final = 60                   # 1 min

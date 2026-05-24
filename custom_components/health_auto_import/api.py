@@ -25,6 +25,7 @@ from typing import Any
 
 from .const import (
     CONNECT_TIMEOUT_S,
+    INTER_REQUEST_DELAY_S,
     MAX_RESPONSE_BYTES,
     READ_CHUNK_BYTES,
     READ_TIMEOUT_S,
@@ -102,6 +103,7 @@ class HaeClient:
         self._host = host
         self._port = port
         self._lock = asyncio.Lock()
+        self._last_success: float | None = None  # monotonic timestamp
 
     @property
     def host(self) -> str:
@@ -110,6 +112,12 @@ class HaeClient:
     @property
     def port(self) -> int:
         return self._port
+
+    def seconds_since_last_success(self) -> float | None:
+        """Seconds since last successful RPC response, or None if never."""
+        if self._last_success is None:
+            return None
+        return asyncio.get_event_loop().time() - self._last_success
 
     async def probe(self) -> bool:
         """Cheap TCP connect + immediate close, used by the reachability sensor."""
@@ -243,9 +251,11 @@ class HaeClient:
                             "aborting to prevent OOM"
                         )
                     try:
-                        return json.loads(buf.decode("utf-8").strip())
+                        result = json.loads(buf.decode("utf-8").strip())
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         continue
+                    self._last_success = asyncio.get_event_loop().time()
+                    return result
                 if not buf:
                     raise HaeTransportError(
                         "connection closed before any data received"
@@ -259,3 +269,5 @@ class HaeClient:
                     await writer.wait_closed()
                 except OSError:
                     pass
+                # Cooldown: give the iOS app breathing room between requests.
+                await asyncio.sleep(INTER_REQUEST_DELAY_S)

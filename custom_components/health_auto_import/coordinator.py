@@ -163,7 +163,12 @@ class WatermarkState:
 
 
 class ReachabilityCoordinator(DataUpdateCoordinator[bool]):
-    """Lightweight TCP-probe coordinator. Drives binary_sensor."""
+    """Lightweight reachability coordinator. Drives binary_sensor.
+
+    Piggybacks on tool coordinator results: if any RPC succeeded recently,
+    the server is clearly reachable — no standalone TCP probe needed.
+    Only falls back to a TCP probe when no recent success is recorded.
+    """
 
     def __init__(self, hass: HomeAssistant, client: HaeClient) -> None:
         super().__init__(
@@ -176,6 +181,11 @@ class ReachabilityCoordinator(DataUpdateCoordinator[bool]):
         self.last_probe_time: dt.datetime | None = None
 
     async def _async_update_data(self) -> bool:
+        # If any RPC succeeded within 2× our polling interval, skip probe.
+        age = self.client.seconds_since_last_success()
+        if age is not None and age < INTERVAL_REACHABILITY_S * 2:
+            self.last_probe_time = dt_util.utcnow()
+            return True
         try:
             result = await self.client.probe()
             if result:
