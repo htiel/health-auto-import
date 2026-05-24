@@ -92,14 +92,16 @@ class HaeClient:
     """Async, connection-per-request client for the HAE TCP server.
 
     Each public method opens one TCP connection, sends one JSON-RPC request,
-    reads one response, and closes. No connection pooling — HAE's server
-    expects exactly this pattern.
+    reads one response, and closes. A connection lock ensures only one request
+    is in flight at a time — the HAE iOS app's TCP server freezes under
+    concurrent connections.
     """
 
     def __init__(self, host: str, port: int) -> None:
         # Host/port validated upstream in config_flow; stored immutably.
         self._host = host
         self._port = port
+        self._lock = asyncio.Lock()
 
     @property
     def host(self) -> str:
@@ -111,19 +113,20 @@ class HaeClient:
 
     async def probe(self) -> bool:
         """Cheap TCP connect + immediate close, used by the reachability sensor."""
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self._host, self._port),
-                timeout=CONNECT_TIMEOUT_S,
-            )
-        except (OSError, asyncio.TimeoutError):
-            return False
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except OSError:
-            pass
-        return True
+        async with self._lock:
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port),
+                    timeout=CONNECT_TIMEOUT_S,
+                )
+            except (OSError, asyncio.TimeoutError):
+                return False
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except OSError:
+                pass
+            return True
 
     async def list_tools(self) -> list[dict[str, Any]] | None:
         """Return the tool catalog, or ``None`` if unsupported.
@@ -186,6 +189,7 @@ class HaeClient:
          - Read buffer capped at MAX_RESPONSE_BYTES to prevent OOM.
          - Hard read timeout prevents hanging on a stalled server.
          - Connection is always closed in the ``finally`` block.
+         - Connection lock prevents concurrent requests that freeze HAE.
         """
         body: dict[str, Any] = {
             "jsonrpc": "2.0",
@@ -194,54 +198,55 @@ class HaeClient:
         }
         payload = json.dumps(body, separators=(",", ":")).encode("utf-8") + b"\n"
 
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self._host, self._port),
-                timeout=CONNECT_TIMEOUT_S,
-            )
-        except (OSError, asyncio.TimeoutError) as err:
-            raise HaeTransportError(
-                f"connect {self._host}:{self._port}: {err}"
-            ) from err
-
-        try:
-            writer.write(payload)
-            await writer.drain()
-
-            buf = bytearray()
-            deadline = asyncio.get_running_loop().time() + READ_TIMEOUT_S
-            while True:
-                remaining = deadline - asyncio.get_running_loop().time()
-                if remaining <= 0:
-                    raise HaeTransportError("read timeout")
-                try:
-                    chunk = await asyncio.wait_for(
-                        reader.read(READ_CHUNK_BYTES), timeout=remaining
-                    )
-                except asyncio.TimeoutError as err:
-                    raise HaeTransportError("read timeout") from err
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if len(buf) > MAX_RESPONSE_BYTES:
-                    raise HaeTransportError(
-                        f"response exceeded {MAX_RESPONSE_BYTES} bytes — "
-                        "aborting to prevent OOM"
-                    )
-                try:
-                    return json.loads(buf.decode("utf-8").strip())
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    continue
-            if not buf:
-                raise HaeTransportError(
-                    "connection closed before any data received"
-                )
-            raise HaeTransportError(
-                "connection closed before parseable JSON response"
-            )
-        finally:
-            writer.close()
+        async with self._lock:
             try:
-                await writer.wait_closed()
-            except OSError:
-                pass
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port),
+                    timeout=CONNECT_TIMEOUT_S,
+                )
+            except (OSError, asyncio.TimeoutError) as err:
+                raise HaeTransportError(
+                    f"connect {self._host}:{self._port}: {err}"
+                ) from err
+
+            try:
+                writer.write(payload)
+                await writer.drain()
+
+                buf = bytearray()
+                deadline = asyncio.get_running_loop().time() + READ_TIMEOUT_S
+                while True:
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    if remaining <= 0:
+                        raise HaeTransportError("read timeout")
+                    try:
+                        chunk = await asyncio.wait_for(
+                            reader.read(READ_CHUNK_BYTES), timeout=remaining
+                        )
+                    except asyncio.TimeoutError as err:
+                        raise HaeTransportError("read timeout") from err
+                    if not chunk:
+                        break
+                    buf.extend(chunk)
+                    if len(buf) > MAX_RESPONSE_BYTES:
+                        raise HaeTransportError(
+                            f"response exceeded {MAX_RESPONSE_BYTES} bytes — "
+                            "aborting to prevent OOM"
+                        )
+                    try:
+                        return json.loads(buf.decode("utf-8").strip())
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                if not buf:
+                    raise HaeTransportError(
+                        "connection closed before any data received"
+                    )
+                raise HaeTransportError(
+                    "connection closed before parseable JSON response"
+                )
+            finally:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except OSError:
+                    pass

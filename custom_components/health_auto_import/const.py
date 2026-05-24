@@ -74,7 +74,7 @@ OPT_IN_TOOLS: Final = frozenset({
 })
 
 # --- Polling intervals (seconds, defaults — overridden by adaptive scheduler) -
-INTERVAL_REACHABILITY_S: Final = 30
+INTERVAL_REACHABILITY_S: Final = 60
 INTERVAL_HEALTH_METRICS_S: Final = 300       # 5 min
 INTERVAL_ECG_S: Final = 300                  # 5 min
 INTERVAL_WORKOUTS_S: Final = 60              # 1 min
