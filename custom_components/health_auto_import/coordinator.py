@@ -20,6 +20,7 @@ import logging
 import re
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
@@ -330,6 +331,9 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Accumulated newest records for sensors to read.
         self.latest_records: list[dict[str, Any]] = []
         self.consecutive_failures: int = 0
+        # Known metric names (health_metrics only) — for detecting new metrics.
+        self.known_metrics: set[str] = set()
+        self.config_entry: ConfigEntry | None = None
 
     def _build_args(
         self, start: dt.datetime, end: dt.datetime
@@ -473,6 +477,27 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif records and self.tool_name != TOOL_HEALTH_METRICS:
             # Non-metric tool returned data that was all deduped — still show it.
             self.latest_records = records
+
+        # Detect new health metrics and trigger reload to create sensor entities.
+        if self.tool_name == TOOL_HEALTH_METRICS and records and self.known_metrics:
+            incoming = {
+                safe_slug(m.get("name", ""))
+                for m in records
+                if isinstance(m, dict) and m.get("name")
+            }
+            novel = incoming - self.known_metrics
+            if novel:
+                _LOGGER.info(
+                    "New health metrics detected: %s — scheduling reload",
+                    ", ".join(sorted(novel)),
+                )
+                self.known_metrics |= novel
+                if self.config_entry:
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_reload(
+                            self.config_entry.entry_id
+                        )
+                    )
 
         result = {
             "tool": self.tool_name,

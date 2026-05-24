@@ -20,6 +20,7 @@ from .coordinator import (
     ToolCoordinator,
     WatermarkState,
     run_discovery,
+    safe_slug,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,6 +56,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         discovered_metrics = discovery.metrics
 
+        # Fall back to previously persisted metrics if discovery found none
+        # (e.g. server was down during the health_metrics enumeration call).
+        if not discovered_metrics:
+            saved_metrics = entry.options.get("discovered_metrics", [])
+            if saved_metrics:
+                _LOGGER.info(
+                    "Metric discovery returned 0 metrics — using %d persisted metrics",
+                    len(saved_metrics),
+                )
+                discovered_metrics = saved_metrics
+
         # Load persisted watermarks (if any) from config entry options.
         saved_wm: dict[str, dict] = entry.options.get("watermarks", {})
 
@@ -71,6 +83,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 tool_name=tool_name,
                 watermark_state=wm,
             )
+            # Wire up new-metric detection for health_metrics.
+            if tool_name == "health_metrics":
+                coord.known_metrics = {
+                    safe_slug(m) for m in discovered_metrics
+                }
+                coord.config_entry = entry
             coordinators[tool_name] = coord
 
         # First refresh for all coordinators.
@@ -111,12 +129,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry — persist watermarks before teardown."""
     data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if data:
-        # Save watermarks before unloading.
+        # Save watermarks and discovered metrics before unloading.
         coordinators = data.get("coordinators", {})
         wm_data = {
             name: coord.wm.to_dict() for name, coord in coordinators.items()
         }
-        new_options = {**entry.options, "watermarks": wm_data}
+        metrics = data.get("discovered_metrics", [])
+        new_options = {
+            **entry.options,
+            "watermarks": wm_data,
+            "discovered_metrics": metrics,
+        }
         hass.config_entries.async_update_entry(entry, options=new_options)
 
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
