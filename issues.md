@@ -110,3 +110,48 @@ Waiting for integrations to complete setup: health_auto_import
 ### Fix
 
 Reduced discovery to 2 calls: `listTools` + one `health_metrics` call (for metric enumeration). Skipped standalone probe at startup (discovery proves reachability). Reduced cooldown to 0.5s. Setup now completes in ~8 seconds.
+
+---
+
+## #6 — Infrequent health metrics showing Unknown
+
+**Status:** Fixed in v0.0.18-beta.1  
+**Severity:** Medium — blood_pressure, cardio_recovery, apple_sleeping_wrist_temperature, and other infrequent metrics showed Unknown  
+
+### Problem
+
+Three compounding bugs:
+
+1. **Narrow query window on upgrade**: Pre-v0.0.16 sessions only persisted a global watermark (the most recent data point). After upgrading to v0.0.16+ (which added per-metric watermarks), `metric_watermarks` was empty, so the code fell through to using the narrow global watermark (~12 hours). Infrequent metrics had no data in that window.
+
+2. **Per-metric watermarks only set for new points**: The dedup loop only set per-metric watermarks for non-deduped (new) data points. Metrics whose data was entirely in the dedup LRU never got watermarks, so the window never widened.
+
+3. **latest_records replaced wholesale**: On each poll, `latest_records` was overwritten with only the metrics in the current response. Metrics not returned (because they had no data in the query window) lost their display buckets.
+
+4. **heart_rate data shape**: The `heart_rate` metric uses `{Avg, Min, Max}` instead of `{qty}`. The sensor code only checked for `qty`, returning None for heart_rate.
+
+### Fix
+
+- **Widen query window on upgrade**: When `metric_watermarks` has fewer entries than half the known metrics, fall back to the 7-day seed window.
+- **Set per-metric watermarks for ALL returned metrics**: Added a separate pass after dedup to set watermarks from the latest point in each bucket regardless of dedup status.
+- **Merge latest_records**: For health_metrics, keep previously-seen metric buckets and only update metrics present in the current response.
+- **Handle Avg/Min/Max**: Added fallback to read `Avg` when `qty` is not present. Added Min/Max to extra_state_attributes.
+
+---
+
+## #7 — All tool sensors Unknown after restart (workouts, ECG, medications)
+
+**Status:** Fixed in v0.0.19-beta.1  
+**Severity:** Medium — workout, ECG, and medication sensors showed Unknown after every HA restart  
+
+### Problem
+
+After restart, persisted watermarks produce a narrow query window (`watermark - 5min overlap`). For workouts, the watermark tracks the **end** time of the last workout, but the HAE server filters by **start** time. A 42-minute workout's start time predates the 5-minute overlap window, so the server returns an empty response and `latest_records` stays empty.
+
+Same pattern for ECG (30-second recordings, but the watermark/overlap gap can still miss them) and medications (watermark at the scheduled time, but query may not capture the start).
+
+Additionally, v0.0.17 moved non-health_metrics coordinators to background first-refresh. The "Initial refresh failed" warnings from v0.0.16 were eliminated, but the underlying narrow-window problem persisted.
+
+### Fix
+
+When `latest_records` is empty but a persisted watermark exists, use `watermark - SEED_WINDOW_DAYS (7 days)` for the first poll instead of `watermark - overlap`. The dedup LRU filters already-seen records (no double-counting), but the response still populates `latest_records` for sensor display. Subsequent polls revert to the narrow window.

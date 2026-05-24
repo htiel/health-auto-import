@@ -2,7 +2,7 @@
 
 A Home Assistant HACS integration — companion to the excellent [**Health Auto Export**](https://www.healthyapps.dev/) iOS app by [HealthyApps](https://healthyapps.dev/). Pulls Apple Health data into Home Assistant as **persistent, auto-discovered sensors**: ECG, heart rate, HR notifications, medications, vitals, workouts.
 
-> **Status:** v0.0.13-beta.1 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and health metrics. See [Known Issues](issues.md) for current limitations.
+> **Status:** v0.0.19-beta.1 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. Per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
 
 ## What it does
 
@@ -88,6 +88,8 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 | 3 | "receive failed" NWError 89 in HAE logs | Closed — benign log noise | Low |
 | 4 | Unit mapping mismatches causing recorder warnings | Fixed in v0.0.12 | Medium |
 | 5 | Slow initial setup (~30s) | Fixed in v0.0.12 | Medium |
+| 6 | Infrequent health metrics showing Unknown | Fixed in v0.0.18 | Medium |
+| 7 | All sensors Unknown after restart | Fixed in v0.0.19 | Medium |
 
 **The #1 blocker is the HAE app freezing after ~2–3 minutes of polling.** The app freezes even in the foreground — the UI locks up and the TCP server stops responding. The integration is as resilient as possible — sensors go Unavailable during a freeze and recover when the app is force-closed and reopened.
 
