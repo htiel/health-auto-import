@@ -2,7 +2,7 @@
 
 A Home Assistant HACS integration — companion to the excellent [**Health Auto Export**](https://www.healthyapps.dev/) iOS app by [HealthyApps](https://healthyapps.dev/). Pulls Apple Health data into Home Assistant as **persistent, auto-discovered sensors**: ECG, heart rate, HR notifications, medications, vitals, workouts.
 
-> **Status:** v0.1 scaffold — config flow + reachability sensor only. Per-tool sensors land in v0.2 once the auto-discovery + adaptive scheduler ship. See [plans/v0.1-integration-spec.md](plans/v0.1-integration-spec.md).
+> **Status:** v0.0.13-beta.1 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and health metrics. See [Known Issues](issues.md) for current limitations.
 
 ## What it does
 
@@ -76,6 +76,20 @@ action:
       title: "Health Auto Import offline"
       message: "Wake the device and re-open Health Auto Export."
 ```
+
+## Known issues
+
+See [issues.md](issues.md) for full details and diagnostic evidence.
+
+| # | Issue | Status | Severity |
+|---|-------|--------|----------|
+| 1 | HAE TCP server freezes when iOS app is backgrounded (~2–3 min) | Open — upstream iOS limitation | Critical |
+| 2 | Sensors show "Unavailable" during freeze | Open — expected behavior | Medium |
+| 3 | "receive failed" NWError 89 in HAE logs | Closed — benign log noise | Low |
+| 4 | Unit mapping mismatches causing recorder warnings | Fixed in v0.0.12 | Medium |
+| 5 | Slow initial setup (~30s) | Fixed in v0.0.12 | Medium |
+
+**The #1 blocker is iOS suspending the HAE app in background.** The integration is as resilient as possible — sensors go Unavailable during a freeze and recover automatically when the app is reopened. A real fix requires the HAE developer to implement iOS background execution APIs.
 
 ## Spec & design
 
