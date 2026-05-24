@@ -27,6 +27,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -539,6 +540,10 @@ def _metric_sensors(
         slug = safe_slug(metric_name)
         entities.append(_MetricLatestSensor(coord, metric_name=metric_name,
                                             entry_id=eid, host=host, slug=slug))
+        # Add daily-total sensor for cumulative metrics.
+        if slug in _MetricDailyTotalSensor.CUMULATIVE_METRICS:
+            entities.append(_MetricDailyTotalSensor(coord, metric_name=metric_name,
+                                                     entry_id=eid, host=host, slug=slug))
     return entities
 
 
@@ -685,6 +690,117 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                     if "Max" in latest:
                         attrs["max"] = latest["Max"]
                     return _safe_attr(attrs)
+        return None
+
+
+class _MetricDailyTotalSensor(HaeEntity, SensorEntity):
+    """Daily sum for cumulative health_metrics (steps, calories, etc.).
+
+    Unlike the ``(latest)`` sensor which shows the most recent data point
+    (e.g. "83 steps in the last 15 min"), this sums ALL data points whose
+    date falls on today, matching what Apple Health / Oura / Withings show
+    as "Steps today".
+    """
+
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    # Metrics where a daily sum makes sense (additive quantities).
+    CUMULATIVE_METRICS = frozenset({
+        "step_count",
+        "active_energy",
+        "basal_energy_burned",
+        "flights_climbed",
+        "apple_exercise_time",
+        "apple_stand_hour",
+        "apple_stand_time",
+        "walking_running_distance",
+    })
+
+    # Integer display.
+    _INTEGER = frozenset({
+        "step_count", "flights_climbed", "apple_stand_hour",
+        "apple_exercise_time", "apple_stand_time",
+    })
+
+    # Unit cleanup.
+    _UNIT_MAP: dict[str, str] = {"degF": "°F", "degC": "°C"}
+
+    def __init__(
+        self,
+        coord: ToolCoordinator,
+        *,
+        metric_name: str,
+        entry_id: str,
+        host: str,
+        slug: str,
+    ) -> None:
+        super().__init__(coord, entry_id=entry_id, host=host,
+                         unique_suffix=f"metric_{slug}_daily_total",
+                         device_group=DEVICE_HEALTH_METRICS)
+        self._metric_name = metric_name
+        self._slug = slug
+        self._attr_name = f"{metric_name.replace('_', ' ').title()} (today)"
+
+    def _today_str(self) -> str:
+        """Return today's date as YYYY-MM-DD in the local timezone."""
+        return dt_util.now().strftime("%Y-%m-%d")
+
+    @property
+    def native_value(self) -> float | int | None:
+        records = self.coordinator.latest_records  # type: ignore[union-attr]
+        if not records:
+            return None
+        today = self._today_str()
+        for bucket in records:
+            if bucket.get("name") == self._metric_name:
+                points = bucket.get("data")
+                if not isinstance(points, list):
+                    return None
+                total = 0.0
+                found = False
+                for pt in points:
+                    date_str = pt.get("date", "")
+                    if not date_str.startswith(today):
+                        continue
+                    val = pt.get("qty")
+                    if isinstance(val, (int, float)):
+                        total += val
+                        found = True
+                if not found:
+                    return None
+                if self._slug in self._INTEGER:
+                    return int(round(total))
+                return round(total, 1)
+        return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        records = self.coordinator.latest_records  # type: ignore[union-attr]
+        if not records:
+            return None
+        for bucket in records:
+            if bucket.get("name") == self._metric_name:
+                units = bucket.get("units", "")
+                return self._UNIT_MAP.get(units, units) if units else None
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        records = self.coordinator.latest_records  # type: ignore[union-attr]
+        if not records:
+            return None
+        today = self._today_str()
+        for bucket in records:
+            if bucket.get("name") == self._metric_name:
+                points = bucket.get("data")
+                if not isinstance(points, list):
+                    return None
+                today_points = [p for p in points if p.get("date", "").startswith(today)]
+                if today_points:
+                    return _safe_attr({
+                        "data_points_today": len(today_points),
+                        "date": today,
+                    })
         return None
 
 
