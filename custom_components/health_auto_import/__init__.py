@@ -14,7 +14,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .api import HaeClient
-from .const import CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN, OPT_IN_TOOLS
+from .const import CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN, OPT_IN_TOOLS, TOOL_HEALTH_METRICS
 from .coordinator import (
     ReachabilityCoordinator,
     ToolCoordinator,
@@ -91,15 +91,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 coord.config_entry = entry
             coordinators[tool_name] = coord
 
-        # First refresh for all coordinators.
-        for coord in coordinators.values():
+        # health_metrics: blocking first-refresh (drives metric discovery).
+        hm = coordinators.get(TOOL_HEALTH_METRICS)
+        if hm:
             try:
-                await coord.async_config_entry_first_refresh()
+                await hm.async_config_entry_first_refresh()
             except Exception:  # noqa: BLE001
                 _LOGGER.warning(
-                    "Initial refresh failed for %s — will retry on next poll",
-                    coord.tool_name,
+                    "Initial refresh failed for health_metrics "
+                    "— will retry on next poll",
                 )
+
+        # Remaining coordinators: non-blocking background refresh.
+        _others = [c for n, c in coordinators.items()
+                   if n != TOOL_HEALTH_METRICS]
+        if _others:
+
+            async def _bg_first_refresh(
+                coords: list[ToolCoordinator],
+            ) -> None:
+                for c in coords:
+                    try:
+                        await c.async_refresh()
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug(
+                            "Background refresh deferred for %s",
+                            c.tool_name,
+                        )
+
+            entry.async_create_background_task(
+                hass,
+                _bg_first_refresh(_others),
+                f"hai-deferred-init-{entry.entry_id}",
+            )
     except Exception:  # noqa: BLE001
         _LOGGER.warning(
             "Discovery failed for %s:%d — integration will operate in "
