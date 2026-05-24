@@ -422,6 +422,8 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self.tool_name == TOOL_HEALTH_METRICS:
             # Each record is a metric bucket with "data" array of points.
+            # Build full_records (for sensor display) alongside new_records (for watermark).
+            full_records: list[dict[str, Any]] = []
             for metric_bucket in records:
                 metric_name = metric_bucket.get("name", "")
                 points = metric_bucket.get("data")
@@ -447,6 +449,13 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "units": metric_bucket.get("units", ""),
                         "data": new_points,
                     })
+                # Always keep full bucket for display.
+                if points:
+                    full_records.append({
+                        "name": metric_name,
+                        "units": metric_bucket.get("units", ""),
+                        "data": points[:MAX_RECORDS_PER_RESPONSE],
+                    })
         else:
             for rec in records:
                 if not isinstance(rec, dict):
@@ -468,6 +477,12 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if new_records:
             self.latest_records = new_records
+        elif self.tool_name == TOOL_HEALTH_METRICS and full_records:
+            # No new points, but we have fetched data — keep sensors fed.
+            self.latest_records = full_records
+        elif records and self.tool_name != TOOL_HEALTH_METRICS:
+            # Non-metric tool returned data that was all deduped — still show it.
+            self.latest_records = records
 
         return {
             "tool": self.tool_name,
