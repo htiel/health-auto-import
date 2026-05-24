@@ -2,7 +2,18 @@
   "config": {
     "step": {
       "user": {
-        "title": "Health Auto Import — connect to a Health Auto Export server",
+        "title": "Health Auto Import — scanning network…",
+        "description": "Scanning your local network for Health Auto Export servers on port 9000."
+      },
+      "pick": {
+        "title": "Health Auto Import — server found",
+        "description": "Select a discovered Health Auto Export server, or enter an address manually.",
+        "data": {
+          "host": "Server"
+        }
+      },
+      "manual": {
+        "title": "Health Auto Import — manual connection",
         "description": "Enter the IP address and port shown on the Server screen of the Health Auto Export app on your iPhone or iPad.",
         "data": {
           "host": "Host (IP address)",
