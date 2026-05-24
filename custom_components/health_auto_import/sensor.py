@@ -549,8 +549,8 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
 
     # Metrics that should be displayed as integers.
     _INTEGER_METRICS = frozenset({
-        "apple_stand_hour", "flights_climbed", "step_count",
-        "resting_heart_rate", "walking_heart_rate_average",
+        "apple_stand_hour", "flights_climbed", "heart_rate",
+        "step_count", "resting_heart_rate", "walking_heart_rate_average",
         "six_minute_walking_test_distance",
     })
 
@@ -633,8 +633,15 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                         h = int(hours)
                         m = int(round((hours - h) * 60))
                         return f"{h}h {m}m"
+                    # Standard scalar value.
                     if "qty" in latest:
                         val = latest["qty"]
+                        if isinstance(val, (int, float)):
+                            return self._round(val)
+                        return val
+                    # Aggregated metrics (e.g. heart_rate) use Avg/Min/Max.
+                    if "Avg" in latest:
+                        val = latest["Avg"]
                         if isinstance(val, (int, float)):
                             return self._round(val)
                         return val
@@ -672,6 +679,11 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                     if source:
                         attrs["source_devices"] = [s.strip() for s in source.split("|")]
                     attrs["date"] = latest.get("date")
+                    # Include min/max for aggregated metrics (e.g. heart_rate).
+                    if "Min" in latest:
+                        attrs["min"] = latest["Min"]
+                    if "Max" in latest:
+                        attrs["max"] = latest["Max"]
                     return _safe_attr(attrs)
         return None
 

@@ -405,7 +405,17 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Use the OLDEST per-metric watermark so infrequent metrics
             # (e.g. blood_pressure) aren't left behind when frequent metrics
             # (e.g. step_count) advance the global watermark.
-            window_start = self.wm.oldest_metric_watermark() - self._overlap()
+            #
+            # Guard: if we have watermarks for fewer than half the known metrics
+            # (e.g. upgrade from pre-0.0.16 where metric_watermarks didn't exist),
+            # fall back to the seed window so all metrics get a chance to populate.
+            if (
+                self.known_metrics
+                and len(self.wm.metric_watermarks) < len(self.known_metrics) // 2
+            ):
+                window_start = now - timedelta(days=SEED_WINDOW_DAYS)
+            else:
+                window_start = self.wm.oldest_metric_watermark() - self._overlap()
         elif self.wm.watermark is not None:
             window_start = self.wm.watermark - self._overlap()
         elif self.tool_name in SPARSE_TOOLS:
@@ -475,6 +485,26 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "units": metric_bucket.get("units", ""),
                         "data": new_points,
                     })
+                # Set per-metric watermark from the latest point in the
+                # bucket regardless of dedup status.  This ensures metrics
+                # that are entirely deduped still get watermarks (critical
+                # on upgrade from pre-0.0.16 where metric_watermarks was
+                # absent and the global watermark produced a narrow window).
+                if points:
+                    latest_pt = max(
+                        (p for p in points if isinstance(p, dict)),
+                        key=lambda p: p.get("date", ""),
+                        default=None,
+                    )
+                    if latest_pt:
+                        lpt_ts = _clamp_ts(
+                            parse_hae_ts(latest_pt.get("date", ""))
+                        )
+                        if lpt_ts:
+                            prev = self.wm.metric_watermarks.get(metric_name)
+                            if prev is None or lpt_ts > prev:
+                                self.wm.metric_watermarks[metric_name] = lpt_ts
+
                 # Always keep full bucket for display.
                 if points:
                     full_records.append({
@@ -501,12 +531,25 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ):
                     self.wm.watermark = rec_ts
 
-        if new_records:
+        if self.tool_name == TOOL_HEALTH_METRICS:
+            # Merge: update buckets from the current response but keep
+            # previously-seen metrics that aren't in this response.  This
+            # prevents infrequent metrics (e.g. blood_pressure) from
+            # vanishing when the query window doesn't include their data.
+            cache: dict[str, dict[str, Any]] = {
+                r["name"]: r
+                for r in self.latest_records
+                if isinstance(r, dict) and "name" in r
+            }
+            source = full_records if full_records else new_records
+            for bucket in source:
+                if isinstance(bucket, dict) and "name" in bucket:
+                    cache[bucket["name"]] = bucket
+            if cache:
+                self.latest_records = list(cache.values())
+        elif new_records:
             self.latest_records = new_records
-        elif self.tool_name == TOOL_HEALTH_METRICS and full_records:
-            # No new points, but we have fetched data — keep sensors fed.
-            self.latest_records = full_records
-        elif records and self.tool_name != TOOL_HEALTH_METRICS:
+        elif records:
             # Non-metric tool returned data that was all deduped — still show it.
             self.latest_records = records
 
