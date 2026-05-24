@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local artifacts / PHI — never commit
+*.creds
+events*.jsonl
+automations.json
+_query.out
+_sub.log
+_summary.out
+*.local.*
+
+# Handoff folder — contains PII, medical data, real IPs, broker creds
+HealthHandoff/

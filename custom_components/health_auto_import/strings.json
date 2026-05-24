@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Health Auto Import — connect to a Health Auto Export server",
+        "description": "Enter the IP address and port shown on the Server screen of the Health Auto Export app on your iPhone or iPad.",
+        "data": {
+          "host": "Host (IP address)",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the HAE server. Make sure HAE is foregrounded on the device and the server is started.",
+      "invalid_host": "Invalid host name. Use an IP address or hostname (letters, digits, dots, hyphens only).",
+      "invalid_port": "Port must be between 1 and 65535."
+    },
+    "abort": {
+      "already_configured": "This Health Auto Export server is already imported."
+    }
+  }
+}
