@@ -213,6 +213,16 @@ class HaeClient:
         }
         payload = json.dumps(body, separators=(",", ":")).encode("utf-8") + b"\n"
 
+        method = envelope.get("method", "?")
+        tool = (envelope.get("params") or {}).get("name", "")
+        rpc_id = body["id"]
+        label = f"{method}({tool})" if tool else method
+        _LOGGER.debug(
+            "[RPC %s] %s → %s:%s (timeout=%ss)",
+            rpc_id, label, self._host, self._port, read_timeout,
+        )
+        t0 = asyncio.get_running_loop().time()
+
         async with self._lock:
             try:
                 reader, writer = await asyncio.wait_for(
@@ -220,6 +230,7 @@ class HaeClient:
                     timeout=CONNECT_TIMEOUT_S,
                 )
             except (OSError, asyncio.TimeoutError) as err:
+                _LOGGER.debug("[RPC %s] connect FAILED: %s", rpc_id, err)
                 raise HaeTransportError(
                     f"connect {self._host}:{self._port}: {err}"
                 ) from err
@@ -229,6 +240,7 @@ class HaeClient:
                 try:
                     await writer.drain()
                 except OSError as err:
+                    _LOGGER.debug("[RPC %s] write FAILED: %s", rpc_id, err)
                     raise HaeTransportError(
                         f"write error: {err}"
                     ) from err
@@ -261,6 +273,11 @@ class HaeClient:
                         result = json.loads(buf.decode("utf-8").strip())
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         continue
+                    elapsed = asyncio.get_running_loop().time() - t0
+                    _LOGGER.debug(
+                        "[RPC %s] %s ← OK (%s bytes, %.1fs)",
+                        rpc_id, label, len(buf), elapsed,
+                    )
                     self._last_success = asyncio.get_event_loop().time()
                     return result
                 if not buf:

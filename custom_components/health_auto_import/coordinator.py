@@ -385,15 +385,21 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Dense tool — seed with SEED_WINDOW_DAYS.
             window_start = now - timedelta(days=SEED_WINDOW_DAYS)
 
+        _LOGGER.debug(
+            "[%s] polling window %s → %s",
+            self.tool_name, hae_ts(window_start), hae_ts(now),
+        )
         try:
             data = await self.client.call_tool(
                 self.tool_name, self._build_args(window_start, now)
             )
         except HaeTransportError as err:
             self.consecutive_failures += 1
+            _LOGGER.debug("[%s] transport error: %s", self.tool_name, err)
             raise UpdateFailed(str(err)) from err
         except HaeProtocolError as err:
             self.consecutive_failures += 1
+            _LOGGER.debug("[%s] protocol error: %s", self.tool_name, err)
             raise UpdateFailed(str(err)) from err
 
         # Reset failure counter on success.
@@ -468,10 +474,18 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Non-metric tool returned data that was all deduped — still show it.
             self.latest_records = records
 
-        return {
+        result = {
             "tool": self.tool_name,
             "new_count": len(new_records),
             "total_ingested": len(self.wm.dedup.export()),
             "watermark": self.wm.watermark.isoformat() if self.wm.watermark else None,
             "records": self.latest_records,
         }
+        _LOGGER.debug(
+            "[%s] %d new records, %d total, watermark=%s",
+            self.tool_name,
+            result["new_count"],
+            result["total_ingested"],
+            result["watermark"],
+        )
+        return result
