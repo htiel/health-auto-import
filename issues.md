@@ -20,6 +20,8 @@ Five diagnostic dumps analyzed (v0.0.9 through v0.0.13), all showing the same pa
 
 Key finding: the freeze happens on **light calls** (workouts, heart_notifications) just as often as heavy ones (health_metrics), proving it is not caused by query complexity or our request volume.
 
+Additionally, the HAE in-app log view only shows "TCP Server listening on port 9000 v1.0" — it never displays incoming connections, requests, or errors, even though the diagnostic export's `events.jsonl` logs all of them. The in-app log is not wired to the same event stream.
+
 ### What we tried
 
 | Version | Change | Result |
