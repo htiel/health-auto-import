@@ -82,7 +82,7 @@ This appears after **every** successful call and can be safely ignored. The resp
 
 ## #4 — Unit mapping mismatches causing HA recorder warnings
 
-**Status:** Fixed in v0.0.10 / v0.0.12  
+**Status:** Fixed in v1.0.0  
 **Severity:** Medium — caused `WS_TYPE_STATISTICS_ISSUES` warnings and orphaned statistics  
 
 ### Problem
@@ -97,7 +97,7 @@ Stripped `_UNIT_MAP` to only two mappings: `degF` → `°F` and `degC` → `°C`
 
 ## #5 — Slow initial setup triggering HA "Waiting for integrations" warning
 
-**Status:** Fixed in v0.0.12  
+**Status:** Fixed in v1.0.0  
 **Severity:** Medium — HA logs a warning if setup takes >10s  
 
 ### Problem
@@ -115,7 +115,7 @@ Reduced discovery to 2 calls: `listTools` + one `health_metrics` call (for metri
 
 ## #6 — Infrequent health metrics showing Unknown
 
-**Status:** Fixed in v0.0.18-beta.1  
+**Status:** Fixed in v1.0.0  
 **Severity:** Medium — blood_pressure, cardio_recovery, apple_sleeping_wrist_temperature, and other infrequent metrics showed Unknown  
 
 ### Problem
@@ -141,7 +141,7 @@ Three compounding bugs:
 
 ## #7 — All tool sensors Unknown after restart (workouts, ECG, medications)
 
-**Status:** Fixed in v0.0.19-beta.1  
+**Status:** Fixed in v1.0.0  
 **Severity:** Medium — workout, ECG, and medication sensors showed Unknown after every HA restart  
 
 ### Problem

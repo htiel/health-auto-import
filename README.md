@@ -94,10 +94,10 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 | 1 | HAE TCP server and UI freeze after ~2–3 min of polling | Open — upstream HAE app bug | Critical |
 | 2 | Sensors show "Unavailable" during freeze | Open — expected behavior | Medium |
 | 3 | "receive failed" NWError 89 in HAE logs | Closed — benign log noise | Low |
-| 4 | Unit mapping mismatches causing recorder warnings | Fixed in v0.0.12 | Medium |
-| 5 | Slow initial setup (~30s) | Fixed in v0.0.12 | Medium |
-| 6 | Infrequent health metrics showing Unknown | Fixed in v0.0.18 | Medium |
-| 7 | All sensors Unknown after restart | Fixed in v0.0.19 | Medium |
+| 4 | Unit mapping mismatches causing recorder warnings | Fixed in v1.0.0 | Medium |
+| 5 | Slow initial setup (~30s) | Fixed in v1.0.0 | Medium |
+| 6 | Infrequent health metrics showing Unknown | Fixed in v1.0.0 | Medium |
+| 7 | All sensors Unknown after restart | Fixed in v1.0.0 | Medium |
 
 **The #1 blocker is the HAE app freezing after ~2–3 minutes of polling.** The app freezes even in the foreground — the UI locks up and the TCP server stops responding. The integration is as resilient as possible — sensors go Unavailable during a freeze and recover when the app is force-closed and reopened.
 
@@ -105,12 +105,7 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 
 | Version | Changes |
 |---------|---------|
-| v1.0.0 | **First stable release.** New brand icon & README imagery. Daily-total sensors, reorganized dashboard, `dt_util` fix, tuned adaptive polling, watermarks, background startup, merge-based caching |
-| v0.0.20-beta.1 | Tuned adaptive polling intervals — 91% TCP call reduction (health metrics 30 min, workouts 10 min, reachability 2 min) |
-| v0.0.19-beta.1 | Fixed all sensors Unknown after HA restart — background startup sequencing |
-| v0.0.18-beta.1 | Fixed infrequent metrics showing Unknown — watermark-based staleness handling |
-| v0.0.17-beta.1 | Fixed startup sequencing — coordinators wait for platform setup |
-| v0.0.12-beta.1 | Unit mapping fixes, faster initial setup |
+| v1.0.0 | **First stable release.** New brand icon & README imagery. Daily-total sensors for cumulative metrics, reorganized dashboard, tuned adaptive polling (91% TCP call reduction), per-metric watermarks, background startup sequencing, merge-based display caching, unit mapping fixes, `dt_util` import fix |
 
 ## Spec & design
 
