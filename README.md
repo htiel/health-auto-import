@@ -2,7 +2,7 @@
 
 A Home Assistant HACS integration — companion to the excellent [**Health Auto Export**](https://www.healthyapps.dev/) iOS app by [HealthyApps](https://healthyapps.dev/). Pulls Apple Health data into Home Assistant as **persistent, auto-discovered sensors**: ECG, heart rate, HR notifications, medications, vitals, workouts.
 
-> **Status:** v0.0.19-beta.1 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. Per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
+> **Status:** v0.0.21-beta.1 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. Daily-total sensors for cumulative metrics (steps, calories, distance, etc.). Tuned adaptive polling, per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
 
 ## What it does
 
@@ -92,6 +92,17 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 | 7 | All sensors Unknown after restart | Fixed in v0.0.19 | Medium |
 
 **The #1 blocker is the HAE app freezing after ~2–3 minutes of polling.** The app freezes even in the foreground — the UI locks up and the TCP server stops responding. The integration is as resilient as possible — sensors go Unavailable during a freeze and recover when the app is force-closed and reopened.
+
+### Changelog highlights
+
+| Version | Changes |
+|---------|---------|
+| v0.0.21-beta.1 | Daily-total sensors for cumulative metrics, reorganized Health dashboard by topic, `dt_util` import fix |
+| v0.0.20-beta.1 | Tuned adaptive polling intervals — 91% TCP call reduction (health metrics 30 min, workouts 10 min, reachability 2 min) |
+| v0.0.19-beta.1 | Fixed all sensors Unknown after HA restart — background startup sequencing |
+| v0.0.18-beta.1 | Fixed infrequent metrics showing Unknown — watermark-based staleness handling |
+| v0.0.17-beta.1 | Fixed startup sequencing — coordinators wait for platform setup |
+| v0.0.12-beta.1 | Unit mapping fixes, faster initial setup |
 
 ## Spec & design
 
