@@ -57,7 +57,7 @@ Copy `custom_components/health_auto_import/` to `<config>/custom_components/` an
 
 ## Configure
 
-1. On the iPad/iPhone: open Health Auto Export → **Server** → **Start Server**, note the IP and port (default `9000`). Make sure server version is **v0.0.1**.
+1. On the iPad/iPhone: open Health Auto Export → **Server** → **Start Server**, note the IP and port (default `9000`). Make sure server version is **v1.0**.
 2. In HA: **Settings → Devices & Services → Add Integration → Health Auto Import**.
 3. Enter the IP and port from step 1. The integration connects, verifies, and creates the device.
 
