@@ -10,7 +10,7 @@
 
 A Home Assistant HACS integration — companion to the excellent [**Health Auto Export**](https://www.healthyapps.dev/) iOS app by [HealthyApps](https://healthyapps.dev/). Pulls Apple Health data into Home Assistant as **persistent, auto-discovered sensors**: ECG, heart rate, HR notifications, medications, vitals, workouts.
 
-> **Status:** v1.0.0 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. Daily-total sensors for cumulative metrics (steps, calories, distance, etc.). Tuned adaptive polling, per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
+> **Status:** v1.1.0 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. LCARS Sickbay data contract: ECG waveforms, sleep hypnogram segments, workout HR time-series, GPS route polylines. Daily-total sensors for cumulative metrics (steps, calories, distance, etc.). Tuned adaptive polling, per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
 
 ## What it does
 
@@ -105,6 +105,7 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 
 | Version | Changes |
 |---------|---------|
+| v1.1.0 | **LCARS Sickbay data contract.** ECG voltage waveform array, sleep-analysis stage segments, workout HR time-series samples, GPS route as Google-encoded polyline, `lcars_schema_version` probe attribute |
 | v1.0.0 | **First stable release.** New brand icon & README imagery. Daily-total sensors for cumulative metrics, reorganized dashboard, tuned adaptive polling (91% TCP call reduction), per-metric watermarks, background startup sequencing, merge-based display caching, unit mapping fixes, `dt_util` import fix |
 
 ## Spec & design
