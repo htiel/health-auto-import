@@ -365,7 +365,7 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
         if self.tool_name == TOOL_WORKOUTS:
             args["includeMetadata"] = False
-            args["includeRoutes"] = False
+            args["includeRoutes"] = True
         elif self.tool_name == TOOL_HEALTH_METRICS:
             args["metrics"] = ",".join(ALL_METRIC_IDS)
         return args

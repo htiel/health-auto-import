@@ -55,7 +55,29 @@ from .entity import (
 _LOGGER = logging.getLogger(__name__)
 
 # Maximum attribute payload size (bytes) to prevent state-event bloat.
-_MAX_ATTR_BYTES = 16_384
+# Raised from 16 KiB to 40 KiB for ECG voltage arrays (512 Hz × 30 s ≈ 30 KB).
+_MAX_ATTR_BYTES = 40_960
+
+
+def _encode_polyline(coords: list[tuple[float, float]]) -> str:
+    """Google-encode a list of (lat, lng) tuples into a polyline string."""
+    result: list[str] = []
+    prev_lat = 0
+    prev_lng = 0
+    for lat, lng in coords:
+        lat_e5 = round(lat * 1e5)
+        lng_e5 = round(lng * 1e5)
+        d_lat = lat_e5 - prev_lat
+        d_lng = lng_e5 - prev_lng
+        prev_lat = lat_e5
+        prev_lng = lng_e5
+        for val in (d_lat, d_lng):
+            val = ~(val << 1) if val < 0 else val << 1
+            while val >= 0x20:
+                result.append(chr((0x20 | (val & 0x1F)) + 63))
+                val >>= 5
+            result.append(chr(val + 63))
+    return "".join(result)
 
 
 def _safe_attr(data: Any) -> Any:
@@ -311,6 +333,36 @@ class _EcgVoltageCountSensor(HaeEntity, SensorEntity):
         rec = _latest_ecg(self.coordinator)  # type: ignore[arg-type]
         return rec.get("numberOfVoltageMeasurements") if rec else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        rec = _latest_ecg(self.coordinator)  # type: ignore[arg-type]
+        if not rec:
+            return None
+        raw = rec.get("voltageMeasurements")
+        if not isinstance(raw, list) or not raw:
+            return None
+        # Extract microvolt values from [{date, units, voltage}, ...].
+        voltage_uv = [
+            round(m["voltage"]) if isinstance(m.get("voltage"), (int, float)) else m.get("voltage")
+            for m in raw
+        ]
+        attrs: dict[str, Any] = {
+            "voltage_uv": voltage_uv,
+            "voltage_unit": "uV",
+            "classification": rec.get("classification"),
+            "average_bpm": (int(v) if (v := rec.get("averageHeartRate")) is not None else None),
+            "duration_s": None,
+            "sampling_frequency_hz": rec.get("samplingFrequency"),
+            "lcars_schema_version": "1",
+        }
+        start = parse_hae_ts(rec.get("start", ""))
+        end = parse_hae_ts(rec.get("end", ""))
+        if start and end:
+            attrs["duration_s"] = (end - start).total_seconds()
+        if start:
+            attrs["recorded_at"] = start.isoformat()
+        return _safe_attr(attrs)
+
 
 # ---------------------------------------------------------------------------
 # Heart-rate notification sensors (§3.2)
@@ -425,6 +477,38 @@ class _WorkoutStartedAtSensor(HaeEntity, SensorEntity):
         rec = _latest_workout(self.coordinator)  # type: ignore[arg-type]
         return parse_hae_ts(rec.get("start", "")) if rec else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        rec = _latest_workout(self.coordinator)  # type: ignore[arg-type]
+        if not rec:
+            return None
+        attrs: dict[str, Any] = {
+            "workout_type": rec.get("name"),
+            "duration_s": rec.get("duration"),
+            "lcars_schema_version": "1",
+        }
+        dist = rec.get("distance")
+        if isinstance(dist, dict):
+            attrs["distance_m"] = dist.get("qty")
+        elif isinstance(dist, (int, float)):
+            attrs["distance_m"] = dist
+        # GPS route → Google-encoded polyline (§2.4 LCARS data contract).
+        route = rec.get("route") or []
+        if isinstance(route, list) and route:
+            coords: list[tuple[float, float]] = []
+            for pt in route:
+                lat = pt.get("lat")
+                lon = pt.get("lon") or pt.get("lng")
+                if lat is not None and lon is not None:
+                    coords.append((float(lat), float(lon)))
+            if coords:
+                # Downsample to ≤500 points.
+                if len(coords) > 500:
+                    step = len(coords) / 500
+                    coords = [coords[round(i * step)] for i in range(500)]
+                attrs["route_compressed"] = _encode_polyline(coords)
+        return _safe_attr(attrs)
+
 
 class _WorkoutDurationSensor(HaeEntity, SensorEntity):
     _attr_name = "Workout last duration"
@@ -487,6 +571,50 @@ class _WorkoutAvgHrSensor(HaeEntity, SensorEntity):
                 val = avg.get("qty")
                 return int(val) if val is not None else None
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        rec = _latest_workout(self.coordinator)  # type: ignore[arg-type]
+        if not rec:
+            return None
+        attrs: dict[str, Any] = {"lcars_schema_version": "1"}
+        hr = rec.get("heartRate")
+        if isinstance(hr, dict):
+            avg = hr.get("avg")
+            mx = hr.get("max")
+            attrs["avg_bpm"] = int(avg["qty"]) if isinstance(avg, dict) and avg.get("qty") is not None else None
+            attrs["max_bpm"] = int(mx["qty"]) if isinstance(mx, dict) and mx.get("qty") is not None else None
+        attrs["duration_s"] = rec.get("duration")
+        start_ts = parse_hae_ts(rec.get("start", ""))
+        attrs["workout_started"] = start_ts.isoformat() if start_ts else None
+        attrs["workout_type"] = rec.get("name")
+        # HR time-series samples (§2.3 LCARS data contract).
+        raw_hr = rec.get("heartRateData") or rec.get("heartRateSamples") or []
+        if isinstance(raw_hr, list) and raw_hr and start_ts:
+            start_epoch = start_ts.timestamp()
+            samples: list[dict[str, int | float]] = []
+            for pt in raw_hr:
+                ts = pt.get("date") or pt.get("timestamp")
+                bpm = pt.get("qty") or pt.get("Avg") or pt.get("bpm")
+                if ts is not None and bpm is not None:
+                    if isinstance(ts, (int, float)):
+                        t_s = round(ts - start_epoch)
+                    else:
+                        parsed = parse_hae_ts(str(ts))
+                        t_s = round(parsed.timestamp() - start_epoch) if parsed else None
+                    if t_s is not None:
+                        samples.append({"t_s": t_s, "bpm": round(bpm)})
+            # Downsample to ~30s cadence if dense.
+            if len(samples) > 1:
+                samples.sort(key=lambda s: s["t_s"])
+                if len(samples) > 200:
+                    downsampled = [samples[0]]
+                    for s in samples[1:]:
+                        if s["t_s"] - downsampled[-1]["t_s"] >= 25:
+                            downsampled.append(s)
+                    samples = downsampled
+            attrs["samples"] = samples if samples else None
+        return _safe_attr(attrs)
 
 
 class _WorkoutMaxHrSensor(HaeEntity, SensorEntity):
@@ -689,6 +817,47 @@ class _MetricLatestSensor(HaeEntity, SensorEntity):
                         attrs["min"] = latest["Min"]
                     if "Max" in latest:
                         attrs["max"] = latest["Max"]
+                    # Sleep-analysis segments (§2.2 LCARS data contract).
+                    if self._slug == "sleep_analysis":
+                        attrs["lcars_schema_version"] = "1"
+                        total = latest.get("totalSleep")
+                        if total is not None:
+                            attrs["time_asleep_min"] = round(total * 60)
+                        in_bed = latest.get("inBed") or latest.get("timeInBed")
+                        if in_bed is not None:
+                            attrs["time_in_bed_min"] = round(float(in_bed) * 60)
+                            if total and in_bed:
+                                attrs["efficiency_pct"] = round(total / float(in_bed) * 100, 1)
+                        attrs["sleep_score"] = latest.get("sleepScore") or latest.get("score")
+                        attrs["night_start"] = latest.get("startDate") or latest.get("sleepStart")
+                        attrs["night_end"] = latest.get("endDate") or latest.get("sleepEnd")
+                        # Stage segments from Apple Health sleep analysis.
+                        _STAGE_MAP = {
+                            "InBed": "awake", "inBed": "awake",
+                            "Awake": "awake", "awake": "awake",
+                            "AsleepCore": "core", "asleepCore": "core", "core": "core",
+                            "AsleepDeep": "deep", "asleepDeep": "deep", "deep": "deep",
+                            "AsleepREM": "rem", "asleepREM": "rem", "rem": "rem",
+                            "AsleepUnspecified": "core", "asleepUnspecified": "core",
+                        }
+                        raw_segs = (
+                            latest.get("sleepSegments")
+                            or latest.get("segments")
+                            or latest.get("samples")
+                        )
+                        if isinstance(raw_segs, list) and raw_segs:
+                            segments = []
+                            for seg in raw_segs:
+                                stage_raw = seg.get("stage") or seg.get("value") or seg.get("sleepStage") or ""
+                                stage = _STAGE_MAP.get(stage_raw, stage_raw.lower() if stage_raw else "")
+                                if stage:
+                                    segments.append({
+                                        "start": seg.get("start") or seg.get("startDate"),
+                                        "end": seg.get("end") or seg.get("endDate"),
+                                        "stage": stage,
+                                    })
+                            if segments:
+                                attrs["segments"] = segments
                     return _safe_attr(attrs)
         return None
 
