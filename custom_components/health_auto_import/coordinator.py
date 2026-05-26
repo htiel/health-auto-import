@@ -440,14 +440,14 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data = await self.client.call_tool(
                 self.tool_name, self._build_args(window_start, now)
             )
-        except HaeTransportError as err:
+        except (HaeTransportError, HaeProtocolError) as err:
             self.consecutive_failures += 1
-            _LOGGER.debug("[%s] transport error: %s", self.tool_name, err)
-            raise UpdateFailed(str(err)) from err
-        except HaeProtocolError as err:
-            self.consecutive_failures += 1
-            _LOGGER.debug("[%s] protocol error: %s", self.tool_name, err)
-            raise UpdateFailed(str(err)) from err
+            _LOGGER.debug("[%s] poll failed (%d consecutive): %s",
+                          self.tool_name, self.consecutive_failures, err)
+            # Return existing data so sensors keep their last-known values.
+            # Never raise UpdateFailed — sensors should stay available with
+            # stale data rather than flipping to Unknown/Unavailable.
+            return self.data or {}
 
         # Reset failure counter on success.
         self.consecutive_failures = 0

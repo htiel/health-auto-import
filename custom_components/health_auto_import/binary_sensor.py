@@ -52,5 +52,10 @@ class ReachabilityBinarySensor(HaeEntity, BinarySensorEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Reachability sensor uses the default HA availability model."""
+        return self.coordinator.last_update_success
+
+    @property
     def is_on(self) -> bool | None:
         return bool(self.coordinator.data) if self.coordinator.data is not None else None

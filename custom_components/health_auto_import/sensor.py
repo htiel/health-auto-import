@@ -178,7 +178,7 @@ class ServerStatusSensor(HaeEntity, SensorEntity):
         if not self.coordinator.last_update_success or not self.coordinator.data:
             return "unreachable"
         any_failed = any(
-            not c.last_update_success for c in self._tool_coordinators.values()
+            c.consecutive_failures > 0 for c in self._tool_coordinators.values()
         )
         return "degraded" if any_failed else "online"
 
