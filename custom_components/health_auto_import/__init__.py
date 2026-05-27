@@ -132,11 +132,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
     except Exception:  # noqa: BLE001
         _LOGGER.warning(
-            "Discovery failed for %s:%d — integration will operate in "
-            "reachability-only mode until next reload",
+            "Discovery failed for %s:%d — restoring from persisted state",
             host,
             port,
         )
+        # Server is unreachable but we may have persisted state from
+        # a previous successful session.  Create coordinators from
+        # persisted data so sensors keep their last-known values.
+        saved_wm = entry.options.get("watermarks", {})
+        saved_records = entry.options.get("latest_records", {})
+        saved_metrics = entry.options.get("discovered_metrics", [])
+
+        # Reconstruct tool list from persisted watermarks + records keys.
+        persisted_tools = set(saved_wm.keys()) | set(saved_records.keys())
+        if persisted_tools:
+            discovered_metrics = saved_metrics
+            for tool_name in persisted_tools:
+                if tool_name in OPT_IN_TOOLS:
+                    if not entry.options.get(f"enable_{tool_name}", False):
+                        continue
+                wm = WatermarkState.from_dict(saved_wm.get(tool_name, {}))
+                coord = ToolCoordinator(
+                    hass,
+                    client,
+                    tool_name=tool_name,
+                    watermark_state=wm,
+                )
+                tool_records = saved_records.get(tool_name, [])
+                if isinstance(tool_records, list):
+                    coord.restore_records(tool_records)
+                if tool_name == "health_metrics":
+                    coord.known_metrics = {
+                        safe_slug(m) for m in discovered_metrics
+                    }
+                    coord.config_entry = entry
+                coordinators[tool_name] = coord
+            _LOGGER.info(
+                "Restored %d coordinators from persisted state",
+                len(coordinators),
+            )
 
     # Seed reachability from discovery result to avoid an extra probe.
     reachability.data = reachable
