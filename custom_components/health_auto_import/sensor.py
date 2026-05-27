@@ -80,16 +80,23 @@ def _encode_polyline(coords: list[tuple[float, float]]) -> str:
     return "".join(result)
 
 
-def _safe_attr(data: Any) -> Any:
-    """Truncate oversized attribute payloads."""
+def _safe_attr(data: Any) -> dict[str, Any] | None:
+    """Return attribute dict if within size limit, else None.
+
+    HA requires ``extra_state_attributes`` to return ``dict | None``.
+    Returning a string crashes the entity state machine and prevents
+    the entity from being registered.
+    """
     import json as _json
 
+    if not isinstance(data, dict):
+        return None
     try:
         encoded = _json.dumps(data, default=str)
     except (TypeError, ValueError):
         return None
     if len(encoded) > _MAX_ATTR_BYTES:
-        return "(truncated — too large for entity attributes)"
+        return None
     return data
 
 
@@ -346,6 +353,11 @@ class _EcgVoltageCountSensor(HaeEntity, SensorEntity):
             round(m["voltage"]) if isinstance(m.get("voltage"), (int, float)) else m.get("voltage")
             for m in raw
         ]
+        # Downsample to ≤2000 points to stay within the 40 KiB attribute cap.
+        # The LCARS renderer applies LTTB client-side anyway.
+        if len(voltage_uv) > 2000:
+            step = len(voltage_uv) / 2000
+            voltage_uv = [voltage_uv[round(i * step)] for i in range(2000)]
         attrs: dict[str, Any] = {
             "voltage_uv": voltage_uv,
             "voltage_unit": "uV",
