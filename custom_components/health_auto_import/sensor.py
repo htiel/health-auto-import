@@ -545,8 +545,9 @@ class _WorkoutEnergySensor(HaeEntity, SensorEntity):
             return None
         aeb = rec.get("activeEnergyBurned")
         if isinstance(aeb, dict):
-            return aeb.get("qty")
-        return aeb
+            val = aeb.get("qty")
+            return round(val, 1) if isinstance(val, (int, float)) else val
+        return round(aeb, 1) if isinstance(aeb, (int, float)) else aeb
 
 
 class _WorkoutAvgHrSensor(HaeEntity, SensorEntity):

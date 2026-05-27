@@ -69,6 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Load persisted watermarks (if any) from config entry options.
         saved_wm: dict[str, dict] = entry.options.get("watermarks", {})
+        saved_records: dict[str, list] = entry.options.get("latest_records", {})
 
         # 3. Create one coordinator per discovered tool.
         for tool_name in discovery.tools:
@@ -83,6 +84,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 tool_name=tool_name,
                 watermark_state=wm,
             )
+            # Restore persisted sensor data so sensors have values on
+            # restart even when the HAE server is offline.
+            tool_records = saved_records.get(tool_name, [])
+            if isinstance(tool_records, list):
+                coord.restore_records(tool_records)
             # Wire up new-metric detection for health_metrics.
             if tool_name == "health_metrics":
                 coord.known_metrics = {
@@ -150,19 +156,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry — persist watermarks before teardown."""
+    """Unload a config entry — persist watermarks and sensor data before teardown."""
     data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if data:
-        # Save watermarks and discovered metrics before unloading.
+        # Save watermarks, discovered metrics, and latest_records before unloading.
         coordinators = data.get("coordinators", {})
         wm_data = {
             name: coord.wm.to_dict() for name, coord in coordinators.items()
         }
+        records_data: dict[str, list] = {}
+        for name, coord in coordinators.items():
+            if coord.latest_records:
+                records_data[name] = coord.latest_records
         metrics = data.get("discovered_metrics", [])
         new_options = {
             **entry.options,
             "watermarks": wm_data,
             "discovered_metrics": metrics,
+            "latest_records": records_data,
         }
         hass.config_entries.async_update_entry(entry, options=new_options)
 

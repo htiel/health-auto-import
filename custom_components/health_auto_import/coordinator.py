@@ -356,6 +356,15 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.known_metrics: set[str] = set()
         self.config_entry: ConfigEntry | None = None
 
+    def restore_records(self, records: list[dict[str, Any]]) -> None:
+        """Restore persisted latest_records from config entry options.
+
+        Called during setup to pre-populate sensors before the first
+        successful poll so they never show Unknown on restart.
+        """
+        if records:
+            self.latest_records = records
+
     def _build_args(
         self, start: dt.datetime, end: dt.datetime
     ) -> dict[str, Any]:
@@ -555,9 +564,23 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if cache:
                 self.latest_records = list(cache.values())
         elif new_records:
-            self.latest_records = new_records
-        elif records:
-            # Non-metric tool returned data that was all deduped — still show it.
+            # Merge new records into existing, keeping the most recent by
+            # start time.  Dedup by key so we don't accumulate duplicates.
+            existing_keys: set[str] = set()
+            for rec in self.latest_records:
+                key = _dedup_key_for(self.tool_name, rec)
+                if key:
+                    existing_keys.add(key)
+            merged = list(self.latest_records)
+            for rec in new_records:
+                key = _dedup_key_for(self.tool_name, rec)
+                if key and key not in existing_keys:
+                    merged.append(rec)
+                    existing_keys.add(key)
+            self.latest_records = merged
+        elif records and not self.latest_records:
+            # Non-metric tool returned data that was all deduped, but we
+            # have no prior records (first load) — use the response as-is.
             self.latest_records = records
 
         # Detect new health metrics and trigger reload to create sensor entities.
