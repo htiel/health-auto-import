@@ -373,7 +373,7 @@ class ToolCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "end": hae_ts(end),
         }
         if self.tool_name == TOOL_WORKOUTS:
-            args["includeMetadata"] = False
+            args["includeMetadata"] = True
             args["includeRoutes"] = True
         elif self.tool_name == TOOL_HEALTH_METRICS:
             args["metrics"] = ",".join(ALL_METRIC_IDS)

@@ -501,9 +501,18 @@ class _WorkoutStartedAtSensor(HaeEntity, SensorEntity):
         }
         dist = rec.get("distance")
         if isinstance(dist, dict):
-            attrs["distance_m"] = dist.get("qty")
+            qty = dist.get("qty")
+            units = dist.get("units", "")
+            if qty is not None and isinstance(qty, (int, float)):
+                # HAE returns distance in km — convert to meters.
+                if "km" in units.lower():
+                    attrs["distance_m"] = round(qty * 1000, 1)
+                elif "mi" in units.lower():
+                    attrs["distance_m"] = round(qty * 1609.34, 1)
+                else:
+                    attrs["distance_m"] = round(qty, 1)
         elif isinstance(dist, (int, float)):
-            attrs["distance_m"] = dist
+            attrs["distance_m"] = round(dist, 1)
         # GPS route → Google-encoded polyline (§2.4 LCARS data contract).
         route = rec.get("route") or []
         if isinstance(route, list) and route:
@@ -577,12 +586,22 @@ class _WorkoutAvgHrSensor(HaeEntity, SensorEntity):
         rec = _latest_workout(self.coordinator)  # type: ignore[arg-type]
         if not rec:
             return None
+        # Try nested heartRate.avg.qty first, then flat avgHeartRate.qty.
         hr = rec.get("heartRate")
         if isinstance(hr, dict):
             avg = hr.get("avg")
             if isinstance(avg, dict):
                 val = avg.get("qty")
-                return int(val) if val is not None else None
+                if val is not None:
+                    return int(val)
+        # Flat shape from some HAE versions / manual exports.
+        avg_flat = rec.get("avgHeartRate")
+        if isinstance(avg_flat, dict):
+            val = avg_flat.get("qty")
+            if val is not None:
+                return int(val)
+        if isinstance(avg_flat, (int, float)):
+            return int(avg_flat)
         return None
 
     @property
