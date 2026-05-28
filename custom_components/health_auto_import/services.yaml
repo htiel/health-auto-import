@@ -1,0 +1,156 @@
+query:
+  name: Query HAE tool
+  description: >
+    Generic on-demand query against any HAE TCP/MCP tool. Returns the raw
+    server payload as a service response. Apple Health remains the source
+    of truth; no data is stored locally as a result of this call.
+  fields:
+    tool:
+      name: Tool name
+      description: HAE tool name (ecg, workouts, health_metrics, medications, heart_notifications, etc.)
+      required: true
+      example: workouts
+      selector:
+        text:
+    start:
+      name: Start
+      description: Window start (ISO datetime, UTC if no tz). Default = end - days.
+      example: "2026-05-01T00:00:00"
+      selector:
+        datetime:
+    end:
+      name: End
+      description: Window end (ISO datetime, UTC if no tz). Default = now.
+      example: "2026-05-27T23:59:59"
+      selector:
+        datetime:
+    days:
+      name: Days back
+      description: Lookback window in days when start is omitted (default 30, max 2555).
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 2555
+          mode: box
+    limit:
+      name: Limit
+      description: Trim to the N most recent records (default unlimited, max 500).
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    arguments:
+      name: Extra arguments
+      description: Additional tool-specific arguments merged into the JSON-RPC call.
+      example: '{"includeRoutes": true}'
+      selector:
+        object:
+
+query_ecg:
+  name: Query ECG records
+  description: Fetch ECG records (with voltage waveform) directly from the HAE server.
+  fields:
+    start:
+      name: Start
+      example: "2026-01-01T00:00:00"
+      selector:
+        datetime:
+    end:
+      name: End
+      example: "2026-05-27T23:59:59"
+      selector:
+        datetime:
+    days:
+      name: Days back
+      example: 90
+      selector:
+        number: { min: 1, max: 2555, mode: box }
+    limit:
+      name: Limit
+      example: 10
+      selector:
+        number: { min: 1, max: 500, mode: box }
+
+query_workouts:
+  name: Query workouts
+  description: Fetch workout records on demand from the HAE server.
+  fields:
+    start:
+      name: Start
+      selector: { datetime: }
+    end:
+      name: End
+      selector: { datetime: }
+    days:
+      name: Days back
+      example: 30
+      selector: { number: { min: 1, max: 2555, mode: box } }
+    limit:
+      name: Limit
+      example: 20
+      selector: { number: { min: 1, max: 500, mode: box } }
+    include_routes:
+      name: Include GPS routes
+      default: true
+      selector: { boolean: }
+    include_metadata:
+      name: Include metadata (HR series, etc.)
+      default: true
+      selector: { boolean: }
+
+query_metrics:
+  name: Query health metrics
+  description: Fetch one or more health-metric buckets on demand.
+  fields:
+    start:
+      name: Start
+      selector: { datetime: }
+    end:
+      name: End
+      selector: { datetime: }
+    days:
+      name: Days back
+      example: 7
+      selector: { number: { min: 1, max: 2555, mode: box } }
+    limit:
+      name: Limit (metric buckets)
+      example: 100
+      selector: { number: { min: 1, max: 500, mode: box } }
+    metrics:
+      name: Metric IDs
+      description: List or CSV of metric IDs (e.g. ["step_count","heart_rate"]). Omit for all.
+      example: '["step_count","heart_rate"]'
+      selector: { object: }
+
+query_medications:
+  name: Query medications
+  description: Fetch medication log records on demand.
+  fields:
+    start: { name: Start, selector: { datetime: } }
+    end: { name: End, selector: { datetime: } }
+    days:
+      name: Days back
+      example: 30
+      selector: { number: { min: 1, max: 2555, mode: box } }
+    limit:
+      name: Limit
+      example: 50
+      selector: { number: { min: 1, max: 500, mode: box } }
+
+query_heart_notifications:
+  name: Query heart notifications
+  description: Fetch heart-rate notification records on demand.
+  fields:
+    start: { name: Start, selector: { datetime: } }
+    end: { name: End, selector: { datetime: } }
+    days:
+      name: Days back
+      example: 365
+      selector: { number: { min: 1, max: 2555, mode: box } }
+    limit:
+      name: Limit
+      example: 20
+      selector: { number: { min: 1, max: 500, mode: box } }
