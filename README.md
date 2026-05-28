@@ -10,7 +10,7 @@
 
 A Home Assistant HACS integration — companion to the excellent [**Health Auto Export**](https://www.healthyapps.dev/) iOS app by [HealthyApps](https://healthyapps.dev/). Pulls Apple Health data into Home Assistant as **persistent, auto-discovered sensors**: ECG, heart rate, HR notifications, medications, vitals, workouts.
 
-> **Status:** v1.4.0 — auto-discovered sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics. Persistent sensor values with full state persistence across restarts, per-device sync buttons, LCARS Sickbay data contract. Daily-total sensors for cumulative metrics (steps, calories, distance, etc.). Tuned adaptive polling, per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
+> **Status:** v1.5.0 — **on-demand HAE query services** (`health_auto_import.query_*`) let dashboards fetch historical records straight from Apple Health via the HAE server, with no local DB. Plus auto-discovered persistent sensors for ECG, workouts, heart rate notifications, medications, and 34 health metrics; full state persistence across restarts; per-device sync buttons; LCARS Sickbay data contract; daily-total sensors for cumulative metrics; tuned adaptive polling, per-metric watermarks, background startup, merge-based display caching. See [Known Issues](issues.md) for current limitations.
 
 ## What it does
 
@@ -105,11 +105,45 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 
 | Version | Changes |
 |---------|---------|
+| v1.5.0 | **On-demand query services.** `health_auto_import.query_ecg`, `query_workouts`, `query_metrics`, `query_medications`, `query_heart_notifications`, and generic `query` — all `SupportsResponse.ONLY` pass-throughs to the HAE TCP server. Dashboards can fetch any date range on demand without local caching; Apple Health stays the source of truth. Latest-record sensors unchanged. See [HealthHandoff/06-on-demand-query-architecture.md](HealthHandoff/06-on-demand-query-architecture.md) for the recommended LCARS integration pattern |
+| v1.4.3 | Workouts request `includeMetadata` so HR series populates on fresh fetches; `km` → `m` distance conversion; flexible HR parsing |
+| v1.4.2 | ECG voltage crash fix — `_safe_attr` always returns `dict\|None`; ECG waveform downsampled to 2000 points to fit HA's 40 KiB attribute cap |
+| v1.4.1 | Restore from persisted state when discovery fails (server offline at HA boot) |
 | v1.4.0 | **Full state persistence.** Sensor data survives HA restarts even when the HAE server is offline. Non-metric tools (workouts, ECG) merge new records instead of replacing. Workout energy rounded to 1 decimal |
 | v1.3.0 | **Per-device sync buttons.** Sync ECG, workouts, health metrics, medications, and heart notifications individually from each device page |
 | v1.2.0 | **Persistent sensor values.** Sensors retain last-known data when the HAE server is unreachable — no more Unknown/Unavailable flapping. Only sensors that have never received a value show Unknown |
 | v1.1.0 | **LCARS Sickbay data contract.** ECG voltage waveform array, sleep-analysis stage segments, workout HR time-series samples, GPS route as Google-encoded polyline, `lcars_schema_version` probe attribute |
 | v1.0.0 | **First stable release.** New brand icon & README imagery. Daily-total sensors for cumulative metrics, reorganized dashboard, tuned adaptive polling (91% TCP call reduction), per-metric watermarks, background startup sequencing, merge-based display caching, unit mapping fixes, `dt_util` import fix |
+
+## On-demand query services (v1.5.0+)
+
+In addition to the live sensors, six HA services let dashboards pull historical records straight from Apple Health on demand. The integration is a thin pass-through — no caching, no local DB, no schema migration.
+
+| Service | Purpose |
+|---------|---------|
+| `health_auto_import.query` | Generic — any tool, any arguments |
+| `health_auto_import.query_ecg` | ECG records (with voltage waveform) |
+| `health_auto_import.query_workouts` | Workouts (HR series + GPS route optional) |
+| `health_auto_import.query_metrics` | Health metric buckets (steps, HR, sleep, …) |
+| `health_auto_import.query_medications` | Medication log |
+| `health_auto_import.query_heart_notifications` | High/low/irregular HR notifications |
+
+All accept `start` / `end` (ISO datetime), `days` (lookback shortcut), and `limit` (cap N most recent). All are registered with `SupportsResponse.ONLY`, so callers must pass `return_response: true`.
+
+Example from a Lovelace card / frontend:
+
+```js
+const { response } = await hass.callWS({
+  type: 'call_service',
+  domain: 'health_auto_import',
+  service: 'query_workouts',
+  service_data: { days: 90, limit: 20, include_routes: true },
+  return_response: true,
+});
+// response = { tool, count, arguments, data: { workouts: [...] } }
+```
+
+See [HealthHandoff/06-on-demand-query-architecture.md](HealthHandoff/06-on-demand-query-architecture.md) for the full LCARS integration spec.
 
 ## Spec & design
 
