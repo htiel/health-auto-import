@@ -105,7 +105,7 @@ See [issues.md](issues.md) for full details and diagnostic evidence.
 
 | Version | Changes |
 |---------|---------|
-| v1.5.0 | **On-demand query services.** `health_auto_import.query_ecg`, `query_workouts`, `query_metrics`, `query_medications`, `query_heart_notifications`, and generic `query` — all `SupportsResponse.ONLY` pass-throughs to the HAE TCP server. Dashboards can fetch any date range on demand without local caching; Apple Health stays the source of truth. Latest-record sensors unchanged. See [HealthHandoff/06-on-demand-query-architecture.md](HealthHandoff/06-on-demand-query-architecture.md) for the recommended LCARS integration pattern |
+| v1.5.0 | **On-demand query services.** `health_auto_import.query_ecg`, `query_workouts`, `query_metrics`, `query_medications`, `query_heart_notifications`, and generic `query` — all `SupportsResponse.ONLY` pass-throughs to the HAE TCP server. Dashboards can fetch any date range on demand without local caching; Apple Health stays the source of truth. Latest-record sensors unchanged. See [docs/handoff/on-demand-query-architecture.md](docs/handoff/on-demand-query-architecture.md) for the recommended LCARS integration pattern |
 | v1.4.3 | Workouts request `includeMetadata` so HR series populates on fresh fetches; `km` → `m` distance conversion; flexible HR parsing |
 | v1.4.2 | ECG voltage crash fix — `_safe_attr` always returns `dict\|None`; ECG waveform downsampled to 2000 points to fit HA's 40 KiB attribute cap |
 | v1.4.1 | Restore from persisted state when discovery fails (server offline at HA boot) |
@@ -143,7 +143,7 @@ const { response } = await hass.callWS({
 // response = { tool, count, arguments, data: { workouts: [...] } }
 ```
 
-See [HealthHandoff/06-on-demand-query-architecture.md](HealthHandoff/06-on-demand-query-architecture.md) for the full LCARS integration spec.
+See [docs/handoff/on-demand-query-architecture.md](docs/handoff/on-demand-query-architecture.md) for the full LCARS integration spec.
 
 ## Spec & design
 
