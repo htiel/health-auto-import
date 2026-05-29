@@ -182,6 +182,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "reachability": reachability,
         "coordinators": coordinators,
         "discovered_metrics": discovered_metrics,
+        # Snapshot the connection params we set up with; the update
+        # listener compares against these to decide whether a reload
+        # is actually needed (saving latest_records during unload
+        # also fires the listener but must NOT trigger a reload).
+        "connection": (entry.data.get(CONF_HOST), entry.data.get(CONF_PORT, DEFAULT_PORT)),
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -223,5 +228,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload on options update."""
+    """Reload only when the connection (host/port) actually changes.
+
+    The unload path stores 18 MB of ``latest_records`` via
+    ``async_update_entry(..., options=...)``, which also fires this
+    listener. Reloading on that would deadlock against the in-progress
+    unload — so we compare against the connection snapshot taken at
+    setup time and bail out for option-only changes.
+    """
+    bundle = hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}
+    prev = bundle.get("connection")
+    curr = (entry.data.get(CONF_HOST), entry.data.get(CONF_PORT, DEFAULT_PORT))
+    if prev == curr:
+        return
     await hass.config_entries.async_reload(entry.entry_id)
