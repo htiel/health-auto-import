@@ -217,3 +217,72 @@ class HaeConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="manual", data_schema=schema, errors=errors
         )
+
+    # ------------------------------------------------------------------
+    # Reconfigure: edit host/port of an existing entry without removing it.
+    # ------------------------------------------------------------------
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the IP/port of an existing config entry."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        current_host = entry.data.get(CONF_HOST, "")
+        current_port = entry.data.get(CONF_PORT, DEFAULT_PORT)
+
+        if user_input is not None:
+            try:
+                host = _validate_host(user_input[CONF_HOST])
+            except vol.Invalid:
+                errors[CONF_HOST] = "invalid_host"
+                host = user_input[CONF_HOST]
+
+            try:
+                port = _validate_port(user_input.get(CONF_PORT, DEFAULT_PORT))
+            except vol.Invalid:
+                errors[CONF_PORT] = "invalid_port"
+                port = DEFAULT_PORT
+
+            if not errors:
+                # Allow keeping the same host:port (no-op reconfigure is fine).
+                # Only block if the new host:port collides with a *different* entry.
+                new_uid = f"{host}:{port}"
+                for other in self._async_current_entries():
+                    if other.entry_id == entry.entry_id:
+                        continue
+                    if other.unique_id == new_uid:
+                        return self.async_abort(reason="already_configured")
+
+                client = HaeClient(host, port)
+                try:
+                    reachable = await client.probe()
+                except HaeError:
+                    reachable = False
+
+                if not reachable:
+                    errors["base"] = "cannot_connect"
+                else:
+                    await self.async_set_unique_id(new_uid)
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        unique_id=new_uid,
+                        title=f"Health Auto Import ({host})",
+                        data={**entry.data, CONF_HOST: host, CONF_PORT: port},
+                    )
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current_host): str,
+                vol.Optional(CONF_PORT, default=current_port): int,
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "current_host": current_host,
+                "current_port": str(current_port),
+            },
+        )

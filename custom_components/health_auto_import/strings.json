@@ -19,6 +19,14 @@
           "host": "Host (IP address)",
           "port": "Port"
         }
+      },
+      "reconfigure": {
+        "title": "Health Auto Import — change server address",
+        "description": "Update the IP address and port of your Health Auto Export server. Current: {current_host}:{current_port}",
+        "data": {
+          "host": "Host (IP address)",
+          "port": "Port"
+        }
       }
     },
     "error": {
